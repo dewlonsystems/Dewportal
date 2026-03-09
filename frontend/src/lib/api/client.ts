@@ -12,7 +12,6 @@ import axios, {
   AxiosResponse,
   AxiosError,
   InternalAxiosRequestConfig,
-  AxiosHeaders,
 } from 'axios';
 import { API_BASE_URL } from '@/constants/api';
 import { errorLog, debugLog } from '@/lib/utils';
@@ -48,7 +47,7 @@ export interface ApiError {
 
 const DEFAULT_CONFIG: ApiClientConfig = {
   baseURL: API_BASE_URL,
-  timeout: 30000, // 30 seconds
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -73,13 +72,9 @@ apiClient.interceptors.request.use(
       baseURL: config.baseURL,
     });
 
-    // Add M2M authentication headers for all requests
-    // This is CRITICAL - all Django API calls must have M2M auth
     try {
       const m2mHeaders = await getM2MHeaders();
-      
-      // Properly set headers using AxiosHeaders methods
-      // This fixes the TypeScript type error with Axios v1.x
+
       Object.entries(m2mHeaders).forEach(([key, value]) => {
         if (value) {
           config.headers.set(key, value);
@@ -87,14 +82,14 @@ apiClient.interceptors.request.use(
       });
 
     } catch (error) {
-      errorLog('Failed to add M2M headers', error);
-      throw new Error('M2M authentication failed');
+      errorLog('Request could not be completed', error);
+      throw new Error('Service is temporarily unavailable. Please try again later.');
     }
 
     return config;
   },
   (error: AxiosError) => {
-    errorLog('API Request Error', error);
+    errorLog('Request failed to send', error);
     return Promise.reject(error);
   }
 );
@@ -113,24 +108,21 @@ apiClient.interceptors.response.use(
     return response;
   },
   (error: AxiosError) => {
-    // 🎯 Extract meaningful message from Django response
     const responseData = error.response?.data as Record<string, unknown>;
-    
+
     let djangoMessage = '';
-    
-    // Check common Django REST Framework error patterns
+
     if (responseData) {
       if (typeof responseData.detail === 'string') {
-        djangoMessage = responseData.detail; // { "detail": "Invalid credentials" }
+        djangoMessage = responseData.detail;
       } else if (Array.isArray(responseData.non_field_errors)) {
-        djangoMessage = responseData.non_field_errors[0]; // { "non_field_errors": ["Invalid credentials"] }
+        djangoMessage = responseData.non_field_errors[0];
       } else if (typeof responseData.error === 'string') {
-        djangoMessage = responseData.error; // { "error": "Invalid credentials" }
+        djangoMessage = responseData.error;
       } else if (typeof responseData.message === 'string') {
-        djangoMessage = responseData.message; // { "message": "Invalid credentials" }
+        djangoMessage = responseData.message;
       }
-      
-      // Fallback: find first field with array errors (e.g., { "username": ["required"] })
+
       if (!djangoMessage) {
         const firstFieldError = Object.values(responseData).find(
           (val) => Array.isArray(val) && val.length > 0 && typeof val[0] === 'string'
@@ -142,14 +134,15 @@ apiClient.interceptors.response.use(
     }
 
     const errorData: ApiError = {
-      message: djangoMessage || error.message || 'An error occurred', // ✅ Prioritize Django message
+      message: djangoMessage || error.message || 'Something went wrong. Please try again.',
       status: error.response?.status,
       code: (responseData?.error as string) || (responseData?.code as string),
       details: responseData as Record<string, string[]>,
     };
 
-    errorLog('API Response Error', {
-      ...errorData,
+    errorLog('Request returned an error', {
+      status: errorData.status,
+      message: errorData.message,
       url: error.config?.url,
       method: error.config?.method,
     });
@@ -162,9 +155,6 @@ apiClient.interceptors.response.use(
 // API Client Methods
 // -----------------------------------------------------------------------------
 
-/**
- * GET request
- */
 export async function apiGet<T>(
   url: string,
   config?: AxiosRequestConfig
@@ -178,9 +168,6 @@ export async function apiGet<T>(
   };
 }
 
-/**
- * POST request
- */
 export async function apiPost<T>(
   url: string,
   data?: unknown,
@@ -195,9 +182,6 @@ export async function apiPost<T>(
   };
 }
 
-/**
- * PUT request
- */
 export async function apiPut<T>(
   url: string,
   data?: unknown,
@@ -212,9 +196,6 @@ export async function apiPut<T>(
   };
 }
 
-/**
- * PATCH request
- */
 export async function apiPatch<T>(
   url: string,
   data?: unknown,
@@ -229,9 +210,6 @@ export async function apiPatch<T>(
   };
 }
 
-/**
- * DELETE request
- */
 export async function apiDelete<T>(
   url: string,
   config?: AxiosRequestConfig
@@ -249,9 +227,6 @@ export async function apiDelete<T>(
 // Health Check
 // -----------------------------------------------------------------------------
 
-/**
- * Check API health
- */
 export async function checkApiHealth(): Promise<{
   healthy: boolean;
   status?: number;
@@ -266,7 +241,7 @@ export async function checkApiHealth(): Promise<{
   } catch (error) {
     return {
       healthy: false,
-      error: (error as ApiError).message,
+      error: 'Service is currently unavailable.',
     };
   }
 }

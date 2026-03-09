@@ -79,21 +79,19 @@ function getTokenFromCookies(request: NextRequest): string | null {
 }
 
 // -----------------------------------------------------------------------------
-// Helper: Verify JWT Token (RS256 — always verified)
+// Helper: Verify Session
 // -----------------------------------------------------------------------------
 
-async function verifyToken(token: string): Promise<JWTPayload | null> {
+async function verifySession(token: string): Promise<JWTPayload | null> {
   try {
     const publicKeyPem = process.env.JWT_VERIFYING_KEY;
 
     if (!publicKeyPem) {
-      errorLog('Middleware: JWT_VERIFYING_KEY is not set');
+      errorLog('Application is not configured correctly. Contact support.');
       return null;
     }
 
-    // Replace literal \n with actual newlines in case .env stores them escaped
     const normalizedPem = publicKeyPem.replace(/\\n/g, '\n');
-
     const publicKey = await importSPKI(normalizedPem, 'RS256');
 
     const { payload } = await jwtVerify(token, publicKey, {
@@ -103,7 +101,7 @@ async function verifyToken(token: string): Promise<JWTPayload | null> {
     return payload as unknown as JWTPayload;
 
   } catch (error) {
-    errorLog('Middleware: Token verification failed', error);
+    errorLog('Session could not be verified. Please log in again.', error);
     return null;
   }
 }
@@ -115,41 +113,33 @@ async function verifyToken(token: string): Promise<JWTPayload | null> {
 async function getAuthSession(request: NextRequest): Promise<AuthSession> {
   const token = getTokenFromCookies(request);
 
+  const unauthenticated: AuthSession = {
+    user: {
+      id: 0,
+      username: '',
+      email: '',
+      role: 'staff',
+    },
+    isAuthenticated: false,
+    isExpired: true,
+  };
+
   if (!token) {
-    return {
-      user: {
-        id: 0,
-        username: '',
-        email: '',
-        role: 'staff',
-      },
-      isAuthenticated: false,
-      isExpired: true,
-    };
+    return unauthenticated;
   }
 
-  const payload = await verifyToken(token);
+  const payload = await verifySession(token);
 
   if (!payload) {
-    return {
-      user: {
-        id: 0,
-        username: '',
-        email: '',
-        role: 'staff',
-      },
-      isAuthenticated: false,
-      isExpired: true,
-    };
+    return unauthenticated;
   }
 
-  debugLog('Middleware: JWT payload', {
+  debugLog('Session active', {
     role: payload.role,
     user_id: payload.user_id,
     username: payload.username,
   });
 
-  // Check if token is expired
   const now = Math.floor(Date.now() / 1000);
   const isExpired = payload.exp < now;
 
@@ -205,7 +195,7 @@ function isAdminRoute(pathname: string): boolean {
 export async function middleware(request: NextRequest): Promise<NextResponse> {
   const { pathname } = request.nextUrl;
 
-  debugLog('Middleware', { pathname });
+  debugLog('Request received', { pathname });
 
   // Skip middleware for static files and API routes
   if (
@@ -217,7 +207,6 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     return NextResponse.next();
   }
 
-  // Get auth session
   const session = await getAuthSession(request);
 
   // ---------------------------------------------------------------------------
@@ -275,10 +264,10 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     }
 
     if (isAdminRoute(pathname)) {
-      debugLog('Admin route check', {
+      debugLog('Access check', {
         pathname,
         role: session.user.role,
-        isAdmin: session.user.role === ROLES.ADMIN,
+        granted: session.user.role === ROLES.ADMIN,
       });
 
       if (session.user.role !== ROLES.ADMIN) {
@@ -304,14 +293,6 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public files (public folder)
-     * - api routes (handled separately)
-     */
     '/((?!_next/static|_next/image|favicon.ico|api/).*)',
   ],
 };

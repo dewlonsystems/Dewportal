@@ -77,9 +77,9 @@ export function useAuth(): UseAuthReturn {
 
     } catch (error) {
       errorLog('useAuth: Login failed', error);
-      setError(error instanceof Error ? error.message : 'Login failed');
+      setError(error instanceof Error ? error.message : 'Invalid credentials');
       setLoading(false);
-      return { error: 'Login failed' };
+      return { error: 'Invalid credentials' };
     }
   }, [setLoading, setError]);
 

@@ -131,7 +131,7 @@ export async function loginAction(
     errorLog('Login failed', error);
     const apiError = error as ApiError;
     return {
-      error: apiError.message || 'Login failed',
+      error: apiError.message || 'Invalid credentials',
       details: apiError.details,
       status_code: apiError.status,
     };
