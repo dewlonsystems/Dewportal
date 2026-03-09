@@ -1,5 +1,5 @@
 import logging
-from rest_framework import generics, status
+from rest_framework import generics, status, serializers
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -27,17 +27,17 @@ class LoginView(TokenObtainPairView):
     permission_classes = [AllowAny]
 
     def post(self, request, *args, **kwargs):
-        """
-        Handle login request.
-        """
         serializer = self.get_serializer(data=request.data, context={'request': request})
         try:
             serializer.is_valid(raise_exception=True)
             return Response(serializer.validated_data, status=status.HTTP_200_OK)
+        except serializers.ValidationError:
+            # Let the real serializer error through to the frontend
+            raise
         except Exception as e:
             logger.error(f"Login error: {str(e)}")
             return Response(
-                {'error': 'Authentication failed'},
+                {'error': 'Invalid credentials. Please check your username and password.'},
                 status=status.HTTP_401_UNAUTHORIZED
             )
 
@@ -58,13 +58,9 @@ class LogoutView(generics.GenericAPIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
-        """
-        Handle logout request.
-        """
         serializer = self.get_serializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
 
-        # Notify via WebSocket
         from channels.layers import get_channel_layer
         from asgiref.sync import async_to_sync
 
@@ -91,12 +87,8 @@ class ForcePasswordChangeView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        """
-        Change password for users with temporary password.
-        """
         user = request.user
 
-        # Verify user must change password
         if not user.must_change_password:
             return Response(
                 {'error': 'Password change not required'},
@@ -105,21 +97,18 @@ class ForcePasswordChangeView(APIView):
 
         serializer = ForcePasswordChangeSerializer(data=request.data)
         if serializer.is_valid():
-            # Verify temporary password
             if not user.check_password(serializer.validated_data['temporary_password']):
                 return Response(
                     {'error': 'Invalid temporary password'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            # Set new password
             user.set_password(serializer.validated_data['new_password'])
             user.confirm_password_change()
             user.save()
 
             logger.info(f"User {user.username} completed forced password change")
 
-            # Notify via WebSocket
             from channels.layers import get_channel_layer
             from asgiref.sync import async_to_sync
 
@@ -148,12 +137,8 @@ class VerifySessionView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        """
-        Return current session information.
-        """
         user = request.user
 
-        # Check if user is locked or disabled
         if user.is_locked:
             return Response(
                 {'error': 'Account is locked', 'locked_until': user.locked_until.isoformat()},
@@ -188,9 +173,6 @@ class AccountStatusView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        """
-        Check account status without attempting login.
-        """
         username = request.data.get('username')
 
         if not username:

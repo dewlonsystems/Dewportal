@@ -20,7 +20,7 @@ constantly==23.10.4
 cron-descriptor==1.4.5
 cryptography==46.0.5
 daphne==4.2.1
-Django==6.0.3
+Django
 django-celery-beat==2.9.0
 django-cors-headers==4.9.0
 django-filter==25.2
