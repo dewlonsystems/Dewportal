@@ -1,15 +1,14 @@
 // =============================================================================
 // DEWPORTAL FRONTEND - HOME PAGE
 // =============================================================================
-// Landing page with video background, animated text, and login CTA.
-// Professional management-themed design.
+// Redesigned with neutral overlay, proper icons, and brand colors.
 // =============================================================================
 
 'use client';
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui';
+import Image from 'next/image';
 
 // -----------------------------------------------------------------------------
 // Component
@@ -18,10 +17,11 @@ import { Button } from '@/components/ui';
 export default function HomePage() {
   const router = useRouter();
   const [isLoaded, setIsLoaded] = useState(false);
+  const [videoLoaded, setVideoLoaded] = useState(false);
 
   useEffect(() => {
-    // Trigger animation after component mounts
-    const timer = setTimeout(() => setIsLoaded(true), 100);
+    // Trigger entrance animations
+    const timer = setTimeout(() => setIsLoaded(true), 300);
     return () => clearTimeout(timer);
   }, []);
 
@@ -30,16 +30,24 @@ export default function HomePage() {
   };
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-slate-900">
-      {/* Logo - Top Left (Not Centered) */}
-      <div className="absolute top-6 left-6 z-20">
-        <a href="https://dewlons.com" className="flex items-center gap-3">
-          <img
-            src="https://dewlons.com/logo"
-            alt="Dewlon Portal"
-            className="h-10 w-auto object-contain"
-          />
-          <span className="text-white font-semibold text-lg hidden sm:block">
+    <div className="relative min-h-screen overflow-hidden bg-background">
+      {/* Logo - Top Left */}
+      <div 
+        className={`absolute top-6 left-6 z-20 transition-all duration-1000 ${
+          isLoaded ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-10'
+        }`}
+      >
+        <a href="/" className="flex items-center gap-3 group">
+          <div className="relative w-10 h-10 bg-white rounded-lg overflow-hidden shadow-lg group-hover:shadow-xl transition-shadow">
+            <Image
+              src="/logo.png"
+              alt="Dewlon Portal"
+              width={40}
+              height={40}
+              className="object-contain"
+            />
+          </div>
+          <span className="text-white font-semibold text-lg hidden sm:block drop-shadow-md">
             Dewlon Portal
           </span>
         </a>
@@ -54,101 +62,162 @@ export default function HomePage() {
           playsInline
           preload="auto"
           className="w-full h-full object-cover"
-          onLoadedData={() => setIsLoaded(true)}
+          onLoadedData={() => setVideoLoaded(true)}
         >
           <source src="/videos/management-bg.mp4" type="video/mp4" />
           Your browser does not support the video tag.
         </video>
 
-        {/* Subtle Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-b from-slate-900/70 via-slate-900/50 to-slate-900/80" />
+        {/* Neutral Gray/Cream Overlay */}
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-900/80 via-slate-800/75 to-slate-900/85" />
+        
+        {/* Subtle texture overlay */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-black/20" />
       </div>
 
-      {/* Content */}
-      <div className="relative z-10 flex flex-col items-center justify-center min-h-screen px-6 text-center">
-        {/* Animated Text Container */}
-        <div className="max-w-4xl mx-auto space-y-8">
-          {/* Main Heading - Smooth Slide-Up Animation */}
-          <h1
-            className={`text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-white tracking-tight transition-all duration-1000 ease-out ${
-              isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
-            }`}
-            style={{
-              textShadow: '0 4px 20px rgba(0, 0, 0, 0.4)',
-            }}
-          >
-            Secure Financial Management
-            <br />
-            <span className="text-blue-400">Built for Excellence</span>
-          </h1>
+      {/* Animated Background Elements */}
+      <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+        <div 
+          className={`absolute top-1/4 left-1/4 w-96 h-96 bg-accent/15 rounded-full blur-3xl transition-all duration-2000 ${
+            isLoaded ? 'opacity-100 scale-100' : 'opacity-0 scale-50'
+          }`} 
+        />
+        <div 
+          className={`absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-primary-light/15 rounded-full blur-3xl transition-all duration-2000 delay-500 ${
+            isLoaded ? 'opacity-100 scale-100' : 'opacity-0 scale-50'
+          }`} 
+        />
+      </div>
 
-          {/* Subheading - Fade-In with Delay */}
+      {/* Main Content */}
+      <div className="relative z-10 flex flex-col items-center justify-center min-h-screen px-6 text-center">
+        <div className="max-w-5xl mx-auto space-y-10">
+          
+          {/* Main Heading */}
+          <div
+            className={`space-y-4 transition-all duration-1000 ease-out ${
+              isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
+            }`}
+          >
+            <h1 
+              className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-bold text-white tracking-tight leading-tight"
+              style={{
+                textShadow: '0 4px 30px rgba(0, 0, 0, 0.5)',
+              }}
+            >
+              Secure Financial
+              <br />
+              <span className="text-secondary-light">Management</span>
+            </h1>
+            
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <div className="h-px w-12 bg-accent/60" />
+              <p className="text-xl sm:text-2xl md:text-3xl text-white/90 font-light">
+                Built for Excellence
+              </p>
+              <div className="h-px w-12 bg-accent/60" />
+            </div>
+          </div>
+
+          {/* Subheading */}
           <p
-            className={`text-lg sm:text-xl md:text-2xl text-slate-200 max-w-2xl mx-auto leading-relaxed transition-all duration-1000 ease-out delay-300 ${
-              isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
+            className={`text-lg sm:text-xl md:text-2xl text-white/85 max-w-3xl mx-auto leading-relaxed transition-all duration-1000 ease-out delay-300 ${
+              isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
             }`}
           >
             Streamline payments, track transactions, and manage your financial
             operations with enterprise-grade security and real-time insights.
           </p>
 
-          {/* Feature Highlights - Staggered Fade-In */}
-          <div className="flex flex-wrap justify-center gap-6 pt-4">
+          {/* Feature Highlights with SVG Icons */}
+          <div 
+            className={`flex flex-wrap justify-center gap-4 pt-6 transition-all duration-1000 ease-out delay-500 ${
+              isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
+            }`}
+          >
             {[
-              'Real-Time Analytics',
-              'Multi-Channel Payments',
-              'Audit-Ready Records',
-              'Role-Based Access',
+              {
+                icon: (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                ),
+                label: 'Real-Time Analytics'
+              },
+              {
+                icon: (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                  </svg>
+                ),
+                label: 'Multi-Channel Payments'
+              },
+              {
+                icon: (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                  </svg>
+                ),
+                label: 'Audit-Ready Records'
+              },
+              {
+                icon: (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                  </svg>
+                ),
+                label: 'Role-Based Access'
+              },
             ].map((feature, index) => (
               <div
-                key={feature}
-                className={`px-4 py-2 bg-white/10 backdrop-blur-sm rounded-full border border-white/20 text-sm text-white transition-all duration-700 ease-out ${
-                  isLoaded
-                    ? 'opacity-100 translate-y-0'
-                    : 'opacity-0 translate-y-4'
-                }`}
+                key={feature.label}
+                className="group px-6 py-3 bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 hover:bg-white/20 hover:border-white/30 transition-all duration-300 cursor-default"
                 style={{
-                  transitionDelay: `${600 + index * 150}ms`,
+                  animationDelay: `${800 + index * 150}ms`,
                 }}
               >
-                {feature}
+                <div className="flex items-center gap-2 text-white">
+                  {feature.icon}
+                  <span className="text-sm font-medium">{feature.label}</span>
+                </div>
               </div>
             ))}
           </div>
 
-          {/* CTA Button - Pulse Animation */}
+          {/* CTA Button */}
           <div
-            className={`pt-8 transition-all duration-1000 ease-out delay-700 ${
-              isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
+            className={`pt-10 transition-all duration-1000 ease-out delay-700 ${
+              isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
             }`}
           >
-            <Button
-              variant="primary"
-              size="lg"
+            <button
               onClick={handleProceed}
-              className="px-8 py-4 text-base font-semibold bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl transition-all duration-300"
+              className="group relative inline-flex items-center gap-3 px-10 py-5 bg-accent hover:bg-accent-hover text-white font-semibold text-lg rounded-2xl shadow-2xl hover:shadow-accent/25 transition-all duration-300 hover:-translate-y-1 overflow-hidden"
             >
-              Proceed to Login
-            </Button>
-          </div>
-        </div>
-
-        {/* Scroll Indicator - Subtle Bounce */}
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10">
-          <div className="flex flex-col items-center gap-2 text-white/60">
-            <span className="text-xs uppercase tracking-wider">Scroll</span>
-            <div className="w-6 h-10 border-2 border-white/40 rounded-full flex justify-center">
-              <div className="w-1 h-3 bg-white/60 rounded-full mt-2 animate-bounce" />
-            </div>
+              {/* Shine effect */}
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
+              
+              <span>Proceed to Login</span>
+              <svg 
+                className="w-5 h-5 group-hover:translate-x-1 transition-transform" 
+                fill="none" 
+                stroke="currentColor" 
+                viewBox="0 0 24 24"
+              >
+                <path 
+                  strokeLinecap="round" 
+                  strokeLinejoin="round" 
+                  strokeWidth={2} 
+                  d="M13 7l5 5m0 0l-5 5m5-5H6" 
+                />
+              </svg>
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Decorative Elements - Subtle Floating Shapes */}
-      <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl animate-pulse delay-1000" />
-      </div>
+      {/* Bottom Gradient Fade */}
+      <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-background/20 to-transparent z-10 pointer-events-none" />
     </div>
   );
 }
