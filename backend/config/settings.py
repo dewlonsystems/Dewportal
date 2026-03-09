@@ -6,6 +6,8 @@ from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 load_dotenv() 
 
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY')
