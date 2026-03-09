@@ -6,15 +6,19 @@ It serves both HTTP requests and WebSocket connections.
 """
 
 import os
+import django  # <-- Add this
+
+# ⚠️ MUST be before any Django imports
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+django.setup()  # <-- Add this to initialize Django
+
+# Now safe to import Django and Channels components
 from django.core.asgi import get_asgi_application
 from channels.routing import ProtocolTypeRouter, URLRouter
 from channels.auth import AuthMiddlewareStack
 from channels.security.websocket import AllowedHostsOriginValidator
 from django.urls import re_path
 from notifications.routing import websocket_urlpatterns
-
-# Set Django settings module
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 
 # Get Django ASGI application
 django_asgi_app = get_asgi_application()

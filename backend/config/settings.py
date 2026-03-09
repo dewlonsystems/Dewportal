@@ -3,6 +3,9 @@ from pathlib import Path
 from datetime import timedelta
 from django.core.exceptions import ImproperlyConfigured
 
+from dotenv import load_dotenv
+load_dotenv() 
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY')
@@ -191,6 +194,7 @@ PAYSTACK_WEBHOOK_SECRET = os.environ.get('PAYSTACK_WEBHOOK_SECRET')
 PAYSTACK_CALLBACK_URL = os.environ.get('PAYSTACK_CALLBACK_URL')
 
 NEXTJS_URL = os.environ.get('NEXTJS_URL', 'http://localhost:3000')
+RSA_PUBLIC_KEY = os.environ.get('RSA_PUBLIC_KEY')
 
 CORS_ALLOWED_ORIGINS = [
     NEXTJS_URL,
@@ -391,7 +395,7 @@ if not DEBUG:
         'DJANGO_SECRET_KEY',
         'DB_NAME', 'DB_USER', 'DB_PASSWORD', 'DB_HOST',
         'SYSTEM_API_KEY', 'JWT_SIGNING_KEY', 'JWT_VERIFYING_KEY',
-        'RSA_PUBLIC_KEY_PATH', 'DEFAULT_FROM_EMAIL', 'EMAIL_HOST_USER',
+        'RSA_PUBLIC_KEY', 'DEFAULT_FROM_EMAIL', 'EMAIL_HOST_USER',
         'EMAIL_HOST_PASSWORD', 'REDIS_URL',
     ]
     _missing = [var for var in _required_vars if not os.environ.get(var)]

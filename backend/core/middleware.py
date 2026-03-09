@@ -1,6 +1,5 @@
 import jwt
 import hmac
-from pathlib import Path
 from django.conf import settings
 from django.http import JsonResponse
 from django.utils.deprecation import MiddlewareMixin
@@ -22,7 +21,6 @@ class M2MAuthenticationMiddleware(MiddlewareMixin):
     Authorization: Bearer header used for user session tokens.
     """
 
-    # Declare async/sync capability for Django middleware system
     async_capable = True
     sync_capable = True
 
@@ -30,7 +28,7 @@ class M2MAuthenticationMiddleware(MiddlewareMixin):
         self.get_response = get_response
         self._api_key = settings.SYSTEM_API_KEY
         self._public_key = None
-        
+
         # Load RSA public key at startup (thread-safe, no lazy loading)
         self._load_public_key()
 
@@ -39,16 +37,26 @@ class M2MAuthenticationMiddleware(MiddlewareMixin):
 
     def _load_public_key(self):
         """
-        Load the RSA public key from file at startup.
+        Load the RSA public key from environment variable.
         Called once during middleware initialization.
         """
-        key_path = Path(settings.RSA_PUBLIC_KEY_PATH)
-        if not key_path.exists():
+        public_key_pem = getattr(settings, 'RSA_PUBLIC_KEY', None)
+
+        if not public_key_pem:
             raise ImproperlyConfigured(
-                f"RSA public key not found at {key_path}"
+                'RSA_PUBLIC_KEY environment variable is not set'
             )
-        with open(key_path, 'rb') as f:
-            self._public_key = f.read()
+
+        # Normalize escaped newlines in case .env stores them as \n
+        normalized = public_key_pem.replace('\\n', '\n')
+
+        if '-----BEGIN PUBLIC KEY-----' not in normalized:
+            raise ImproperlyConfigured(
+                'RSA_PUBLIC_KEY does not appear to be a valid PEM public key'
+            )
+
+        # Store as bytes for PyJWT
+        self._public_key = normalized.encode('utf-8')
 
     def process_request(self, request):
         """
@@ -61,7 +69,6 @@ class M2MAuthenticationMiddleware(MiddlewareMixin):
             '/static/',
         ]
 
-        # Check if request path should be excluded
         if any(request.path.startswith(path) for path in excluded_paths):
             return None
 
@@ -95,7 +102,6 @@ class M2MAuthenticationMiddleware(MiddlewareMixin):
         token = auth_header.split(' ')[1]
 
         try:
-            # Decode and verify the JWT using pre-loaded public key
             payload = jwt.decode(
                 token,
                 self._public_key,
@@ -143,7 +149,6 @@ class RequestLoggingMiddleware(MiddlewareMixin):
     Captures method, path, user, timestamp, and response status.
     """
 
-    # Declare async/sync capability for Django middleware system
     async_capable = True
     sync_capable = True
 
@@ -163,7 +168,6 @@ class RequestLoggingMiddleware(MiddlewareMixin):
         """
         Log response details after processing.
         """
-        # Import here to avoid circular imports
         if self.logger is None:
             import logging
             self.logger = logging.getLogger('audit')
