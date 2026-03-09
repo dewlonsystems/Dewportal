@@ -18,6 +18,7 @@ export default function HomePage() {
   const router = useRouter();
   const [isLoaded, setIsLoaded] = useState(false);
   const [videoLoaded, setVideoLoaded] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     // Trigger entrance animations
@@ -26,7 +27,11 @@ export default function HomePage() {
   }, []);
 
   const handleProceed = () => {
-    router.push('/login');
+    setIsLoading(true);
+    // Small delay to show spinner before navigation
+    setTimeout(() => {
+      router.push('/login');
+    }, 800);
   };
 
   return (
@@ -89,7 +94,7 @@ export default function HomePage() {
         />
       </div>
 
-      {/* ✅ Main Content - Added pb-20 for bottom spacing, adjusted pt-12 */}
+      {/* Main Content */}
       <div className="relative z-10 flex flex-col items-center justify-center min-h-screen px-6 text-center pt-12 pb-20">
         <div className="max-w-5xl mx-auto space-y-8">
           
@@ -184,7 +189,7 @@ export default function HomePage() {
             ))}
           </div>
 
-          {/* ✅ CTA Button - Reduced pt-10 to pt-6 */}
+          {/* ✅ CTA Button with Loading Spinner */}
           <div
             className={`pt-6 transition-all duration-1000 ease-out delay-700 ${
               isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
@@ -192,25 +197,60 @@ export default function HomePage() {
           >
             <button
               onClick={handleProceed}
-              className="group relative inline-flex items-center gap-3 px-10 py-5 bg-accent hover:bg-accent-hover text-white font-semibold text-lg rounded-2xl shadow-2xl hover:shadow-accent/25 transition-all duration-300 hover:-translate-y-1 overflow-hidden"
+              disabled={isLoading}
+              className={`group relative inline-flex items-center gap-3 px-10 py-5 bg-accent hover:bg-accent-hover text-white font-semibold text-lg rounded-2xl shadow-2xl hover:shadow-accent/25 transition-all duration-300 overflow-hidden ${
+                isLoading ? 'cursor-not-allowed opacity-90' : 'hover:-translate-y-1'
+              }`}
             >
-              {/* Shine effect */}
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
+              {/* Shine effect - only when not loading */}
+              {!isLoading && (
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
+              )}
               
-              <span>Proceed to Login</span>
-              <svg 
-                className="w-5 h-5 group-hover:translate-x-1 transition-transform" 
-                fill="none" 
-                stroke="currentColor" 
-                viewBox="0 0 24 24"
-              >
-                <path 
-                  strokeLinecap="round" 
-                  strokeLinejoin="round" 
-                  strokeWidth={2} 
-                  d="M13 7l5 5m0 0l-5 5m5-5H6" 
-                />
-              </svg>
+              {/* ✅ Loading Spinner */}
+              {isLoading ? (
+                <div className="flex items-center gap-3">
+                  <svg 
+                    className="animate-spin h-5 w-5 text-white" 
+                    xmlns="http://www.w3.org/2000/svg" 
+                    fill="none" 
+                    viewBox="0 0 24 24"
+                  >
+                    <circle 
+                      className="opacity-25" 
+                      cx="12" 
+                      cy="12" 
+                      r="10" 
+                      stroke="currentColor" 
+                      strokeWidth="4"
+                    />
+                    <path 
+                      className="opacity-75" 
+                      fill="currentColor" 
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    />
+                  </svg>
+                  <span>Loading...</span>
+                </div>
+              ) : (
+                /* ✅ Normal Button Content */
+                <>
+                  <span>Proceed to Login</span>
+                  <svg 
+                    className="w-5 h-5 group-hover:translate-x-1 transition-transform" 
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24"
+                  >
+                    <path 
+                      strokeLinecap="round" 
+                      strokeLinejoin="round" 
+                      strokeWidth={2} 
+                      d="M13 7l5 5m0 0l-5 5m5-5H6" 
+                    />
+                  </svg>
+                </>
+              )}
             </button>
           </div>
         </div>
