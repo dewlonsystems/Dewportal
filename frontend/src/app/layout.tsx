@@ -4,7 +4,7 @@
 // Root layout with providers, global styles, and mobile optimizations.
 // =============================================================================
 
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import '@/styles/globals.css';
 import { Providers } from '@/providers';
@@ -20,7 +20,7 @@ const inter = Inter({
 });
 
 // -----------------------------------------------------------------------------
-// Metadata - Enhanced with Mobile Status Bar Support
+// Metadata - SEO & General Info
 // -----------------------------------------------------------------------------
 
 export const metadata: Metadata = {
@@ -32,28 +32,22 @@ export const metadata: Metadata = {
     index: false,
     follow: false,
   },
-  
-  // ✅ Mobile Status Bar & Theme Colors
+};
+
+// -----------------------------------------------------------------------------
+// Viewport - Mobile & Theme Settings ✅ SEPARATE EXPORT
+// -----------------------------------------------------------------------------
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: 'cover',
   themeColor: [
     { media: '(prefers-color-scheme: light)', color: '#1a3d2b' },
     { media: '(prefers-color-scheme: dark)', color: '#122a1e' },
   ],
-  
-  // ✅ Apple Web App Settings
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: 'black-translucent',
-    title: 'Dewlon Portal',
-  },
-  
-  // ✅ Viewport Settings for Mobile
-  viewport: {
-    width: 'device-width',
-    initialScale: 1,
-    maximumScale: 1,
-    userScalable: false,
-    viewportFit: 'cover', // ✅ Critical for full-screen on notched devices
-  },
 };
 
 // -----------------------------------------------------------------------------

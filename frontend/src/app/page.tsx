@@ -74,7 +74,7 @@ export default function HomePage() {
         </video>
 
         {/* Neutral Gray/Cream Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-br from-slate-900/80 via-slate-800/75 to-slate-900/85" />
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/80 via-primary-dark/75 to-primary/85" />
         
         {/* Subtle texture overlay */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-black/20" />
