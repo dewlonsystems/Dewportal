@@ -89,9 +89,9 @@ export default function HomePage() {
         />
       </div>
 
-      {/* Main Content */}
-      <div className="relative z-10 flex flex-col items-center justify-center min-h-screen px-6 text-center">
-        <div className="max-w-5xl mx-auto space-y-10">
+      {/* ✅ Main Content - Added pb-20 for bottom spacing, adjusted pt-12 */}
+      <div className="relative z-10 flex flex-col items-center justify-center min-h-screen px-6 text-center pt-12 pb-20">
+        <div className="max-w-5xl mx-auto space-y-8">
           
           {/* Main Heading */}
           <div
@@ -131,7 +131,7 @@ export default function HomePage() {
 
           {/* Feature Highlights with SVG Icons */}
           <div 
-            className={`flex flex-wrap justify-center gap-4 pt-6 transition-all duration-1000 ease-out delay-500 ${
+            className={`flex flex-wrap justify-center gap-4 pt-4 transition-all duration-1000 ease-out delay-500 ${
               isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
             }`}
           >
@@ -184,9 +184,9 @@ export default function HomePage() {
             ))}
           </div>
 
-          {/* CTA Button */}
+          {/* ✅ CTA Button - Reduced pt-10 to pt-6 */}
           <div
-            className={`pt-10 transition-all duration-1000 ease-out delay-700 ${
+            className={`pt-6 transition-all duration-1000 ease-out delay-700 ${
               isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
             }`}
           >
