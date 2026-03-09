@@ -1,0 +1,49 @@
+{% extends 'emails/base.html' %}
+
+{% block title %}Welcome to Dewlon Portal{% endblock %}
+
+{% block header_title %}Welcome to Dewlon Portal{% endblock %}
+{% block header_subtitle %}Your account has been created{% endblock %}
+
+{% block content %}
+<h2>Hello {{ first_name }},</h2>
+
+<p>Welcome to Dewlon Portal! Your account has been successfully created by our administration team.</p>
+
+<div class="highlight-box">
+    <p><strong>Account Details:</strong></p>
+    <p>Username: <strong>{{ username }}</strong></p>
+    <p>Email: <strong>{{ email }}</strong></p>
+    <p>Role: <strong>{{ role|title }}</strong></p>
+</div>
+
+<p>Your temporary password is:</p>
+
+<div class="code-box">
+    {{ temporary_password }}
+</div>
+
+<p><strong>Important:</strong> This is a temporary password. You will be required to change it upon your first login.</p>
+
+<div class="warning-box">
+    <p><strong>Security Requirements:</strong></p>
+    <ul>
+        <li>Your new password must be at least 8 characters long</li>
+        <li>Must contain uppercase and lowercase letters</li>
+        <li>Must contain at least one number</li>
+        <li>Must contain at least one special character</li>
+    </ul>
+</div>
+
+<p>To get started, please log in at:</p>
+
+<a href="{{ login_url }}" class="button">Log In to Dewlon Portal</a>
+
+<p>If you did not expect this email, please contact our support team immediately.</p>
+
+<p>Best regards,<br>The Dewlon Portal Team</p>
+{% endblock %}
+
+{% block footer_extra %}
+<p>Need help? Contact us at <a href="mailto:support@dewlon.com">support@dewlon.com</a></p>
+{% endblock %}

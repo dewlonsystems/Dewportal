@@ -1,0 +1,45 @@
+{% extends 'emails/base.html' %}
+
+{% block title %}Account Locked - Dewlon Portal{% endblock %}
+
+{% block header_title %}Account Security Alert{% endblock %}
+{% block header_subtitle %}Your account has been temporarily locked{% endblock %}
+
+{% block content %}
+<h2>Hello {{ first_name }},</h2>
+
+<div class="warning-box">
+    <p><strong>Security Alert:</strong> Your account has been temporarily locked due to multiple failed login attempts.</p>
+</div>
+
+<p>This is an automated security measure to protect your account from unauthorized access.</p>
+
+<div class="highlight-box">
+    <p><strong>Account Details:</strong></p>
+    <p>Username: <strong>{{ username }}</strong></p>
+    <p>Lockout Time: <strong>{{ lockout_time }}</strong></p>
+    <p>Auto-Reactivation: <strong>{{ reactivation_time }}</strong></p>
+</div>
+
+<p>Your account will be automatically reactivated after <strong>3 hours</strong>. You do not need to contact support.</p>
+
+<p>If you did not attempt to log in, please:</p>
+<ol style="margin-left: 20px; margin-bottom: 20px;">
+    <li>Change your password immediately after reactivation</li>
+    <li>Review your account activity</li>
+    <li>Contact our security team if you suspect unauthorized access</li>
+</ol>
+
+<p>For security reasons, please ensure you:</p>
+<ul style="margin-left: 20px; margin-bottom: 20px;">
+    <li>Never share your password with anyone</li>
+    <li>Use a strong, unique password</li>
+    <li>Enable two-factor authentication if available</li>
+</ul>
+
+<p>Best regards,<br>The Dewlon Portal Security Team</p>
+{% endblock %}
+
+{% block footer_extra %}
+<p>Security concerns? Contact us at <a href="mailto:security@dewlon.com">security@dewlon.com</a></p>
+{% endblock %}
