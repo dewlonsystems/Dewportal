@@ -55,7 +55,7 @@ service-identity==24.2.0
 six==1.17.0
 sqlparse==0.5.5
 Twisted==25.5.0
-txaio==25.12.2
+txaio
 typing_extensions==4.15.0
 tzdata==2025.3
 tzlocal==5.3.1
