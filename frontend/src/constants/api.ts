@@ -59,7 +59,7 @@ export const PAYMENT_ENDPOINTS = {
   TRANSACTIONS_LIST: `${API_PREFIX}/payments/transactions/`,
   TRANSACTIONS_DETAIL: (id: number) => `${API_PREFIX}/payments/transactions/${id}/`,
   SUMMARY: `${API_PREFIX}/payments/summary/`,
-  // Callbacks/Webhooks - handled by Django directly, not frontend
+  PAYSTACK_VERIFY: `${API_PREFIX}/payments/paystack/verify/`,
   MPESA_CALLBACK: `${API_PREFIX}/payments/callbacks/mpesa/`,
   PAYSTACK_WEBHOOK: `${API_PREFIX}/payments/webhooks/paystack/`,
 } as const;
@@ -164,4 +164,50 @@ export function getFullApiUrl(endpoint: string): string {
  */
 export function getFullWsUrl(endpoint: string): string {
   return `${WS_BASE_URL}${endpoint}`;
+}
+
+/**
+ * Build pagination params
+ */
+export function buildPaginationParams(
+  page?: number,
+  pageSize?: number
+): Record<string, string | number | null> {
+  return {
+    ...(page     !== undefined ? { page }           : {}),
+    ...(pageSize !== undefined ? { page_size: pageSize } : {}),
+  };
+}
+
+/**
+ * Build filter params — strips undefined/null values
+ */
+export function buildFilterParams(
+  filters: Record<string, string | number | undefined | null>
+): Record<string, string | number | null> {
+  return Object.fromEntries(
+    Object.entries(filters).filter(([, v]) => v !== undefined && v !== null)
+  ) as Record<string, string | number | null>;
+}
+
+/**
+ * Build sort params
+ */
+export function buildSortParams(
+  ordering?: string
+): Record<string, string | number | null> {
+  return ordering ? { ordering } : {};
+}
+
+/**
+ * Build date range params
+ */
+export function buildDateRangeParams(
+  dateFrom?: string,
+  dateTo?: string
+): Record<string, string | number | null> {
+  return {
+    ...(dateFrom ? { date_from: dateFrom } : {}),
+    ...(dateTo   ? { date_to:   dateTo   } : {}),
+  };
 }

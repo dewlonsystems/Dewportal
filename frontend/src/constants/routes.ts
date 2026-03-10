@@ -32,6 +32,7 @@ export const DASHBOARD_ROUTES = {
   DASHBOARD: '/dashboard',
   PAYMENTS: '/payments',
   TRANSACTIONS: '/transactions',
+  VERIFY:       '/payments/verify',
   USERS: '/users',
   PROFILE: '/profile',
   AUDIT: '/audit',

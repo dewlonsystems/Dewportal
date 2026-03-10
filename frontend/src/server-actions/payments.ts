@@ -74,8 +74,8 @@ export async function initiatePaymentAction(
       success: response.data.success,
     });
 
-    revalidatePath('/dashboard/transactions');
-    revalidatePath('/dashboard/payments');
+    revalidatePath('/transactions');
+    revalidatePath('/payments');
 
     return {
       success: true,
@@ -94,6 +94,62 @@ export async function initiatePaymentAction(
     };
   }
 }
+
+
+// -----------------------------------------------------------------------------
+// Verify Paystack Payment
+// -----------------------------------------------------------------------------
+
+export interface PaystackVerifyResponse {
+  success: boolean;
+  status: 'completed' | 'failed' | 'pending';
+  message?: string;
+  transaction?: TransactionResponse;
+}
+
+export async function verifyPaystackPaymentAction(
+  reference: string
+): Promise<ApiResponse<PaystackVerifyResponse>> {
+  try {
+    debugLog('Verify Paystack payment', { reference });
+
+    const authHeaders = await getAuthHeaders();
+
+    const url = buildUrl(PAYMENT_ENDPOINTS.PAYSTACK_VERIFY, { reference });
+
+    const response = await apiGet<PaystackVerifyResponse>(url, {
+      headers: authHeaders,
+    });
+
+    debugLog('Paystack verification result', {
+      reference,
+      status: response.data.status,
+      success: response.data.success,
+    });
+
+    // Revalidate transactions if payment completed
+    if (response.data.status === 'completed') {
+      revalidatePath('/dashboard/transactions');
+      revalidatePath('/dashboard/payments');
+    }
+
+    return {
+      success: true,
+      data: response.data,
+      status: 200,
+    };
+
+  } catch (error) {
+    errorLog('Paystack verification failed', error);
+    const apiError = error as ApiError;
+    return {
+      success: false,
+      error: apiError.message || 'Payment verification failed',
+      status_code: apiError.status,
+    };
+  }
+}
+
 
 // -----------------------------------------------------------------------------
 // Get Transactions
