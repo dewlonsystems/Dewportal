@@ -113,6 +113,7 @@ export async function loginAction(
 
     if (response.data.must_change_password) {
       return {
+        success: true,
         data: response.data,
         status: 200,
         message: 'Password change required',
@@ -121,6 +122,7 @@ export async function loginAction(
     }
 
     return {
+      success: true,
       data: response.data,
       status: 200,
       message: 'Login successful',
@@ -131,6 +133,7 @@ export async function loginAction(
     errorLog('Login failed', error);
     const apiError = error as ApiError;
     return {
+      success: false,
       error: apiError.message || 'Invalid credentials',
       details: apiError.details,
       status_code: apiError.status,
@@ -199,6 +202,7 @@ export async function changePasswordAction(
     debugLog('Password changed successfully');
 
     return {
+      success: true,
       status: 200,
       message: 'Password changed successfully',
     };
@@ -207,6 +211,7 @@ export async function changePasswordAction(
     errorLog('Password change failed', error);
     const apiError = error as ApiError;
     return {
+      success: false,
       error: apiError.message || 'Password change failed',
       details: apiError.details,
       status_code: apiError.status,
@@ -240,6 +245,7 @@ export async function forcePasswordChangeAction(
     revalidatePath('/', 'layout');
 
     return {
+      success: true,
       status: 200,
       message: 'Password changed successfully. You can now access all features.',
       redirect: DASHBOARD_ROUTES.DASHBOARD,
@@ -249,6 +255,7 @@ export async function forcePasswordChangeAction(
     errorLog('Force password change failed', error);
     const apiError = error as ApiError;
     return {
+      success: false,
       error: apiError.message || 'Password change failed',
       details: apiError.details,
       status_code: apiError.status,
@@ -281,6 +288,7 @@ export async function requestPasswordResetAction(
     debugLog('Password reset request submitted');
 
     return {
+      success: true,
       status: 200,
       message: 'Password reset request submitted. Admin will review.',
     };
@@ -289,6 +297,7 @@ export async function requestPasswordResetAction(
     errorLog('Password reset request failed', error);
     const apiError = error as ApiError;
     return {
+      success: false,
       error: apiError.message || 'Password reset request failed',
       details: apiError.details,
       status_code: apiError.status,
@@ -307,6 +316,7 @@ export async function refreshAccessTokenAction(): Promise<ApiResponse<{ access: 
 
     if (!refreshToken) {
       return {
+        success: false,
         error: 'No refresh token available',
         status_code: 401,
       };
@@ -331,6 +341,7 @@ export async function refreshAccessTokenAction(): Promise<ApiResponse<{ access: 
     debugLog('Access token refreshed');
 
     return {
+      success: true,
       data: response.data,
       status: 200,
     };
@@ -340,6 +351,7 @@ export async function refreshAccessTokenAction(): Promise<ApiResponse<{ access: 
     await clearAuthCookies();
     const apiError = error as ApiError;
     return {
+      success: false,
       error: apiError.message || 'Session expired',
       status_code: apiError.status || 401,
     };
@@ -359,6 +371,7 @@ export async function verifySessionAction(): Promise<ApiResponse<{
 
     if (!accessToken) {
       return {
+        success: false,
         error: 'No access token',
         status_code: 401,
       };
@@ -377,6 +390,7 @@ export async function verifySessionAction(): Promise<ApiResponse<{
     );
 
     return {
+      success: true,
       data: response.data,
       status: 200,
     };
@@ -385,6 +399,7 @@ export async function verifySessionAction(): Promise<ApiResponse<{
     errorLog('Session verification failed', error);
     const apiError = error as ApiError;
     return {
+      success: false,
       error: apiError.message || 'Session invalid',
       status_code: apiError.status || 401,
     };
@@ -406,6 +421,7 @@ export async function checkAccountStatusAction(
     );
 
     return {
+      success: true,
       data: response.data,
       status: 200,
     };
@@ -414,6 +430,7 @@ export async function checkAccountStatusAction(
     errorLog('Account status check failed', error);
     const apiError = error as ApiError;
     return {
+      success: false,
       error: apiError.message || 'Account status check failed',
       status_code: apiError.status,
     };
@@ -430,12 +447,14 @@ export async function getCurrentUserAction(): Promise<ApiResponse<LoginResponse[
 
     if (session.error || !session.data) {
       return {
+        success: true,
         data: null,
         status: 200,
       };
     }
 
     return {
+      success: true,
       data: session.data.user,
       status: 200,
     };
@@ -443,6 +462,7 @@ export async function getCurrentUserAction(): Promise<ApiResponse<LoginResponse[
   } catch (error) {
     errorLog('Get current user failed', error);
     return {
+      success: true,
       data: null,
       status: 200,
     };

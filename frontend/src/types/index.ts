@@ -144,8 +144,14 @@ export interface SessionVerifyResponse {
     email: string;
     first_name?: string;
     last_name?: string;
+    phone_number?: string | null;
+    is_active?: boolean;
+    is_locked?: boolean;
+    last_seen?: string | null;
     role: UserRole;
     must_change_password?: boolean;
+    created_at?: string; 
+    updated_at?: string;
   };
   session_valid: boolean;
 }
@@ -601,6 +607,7 @@ export interface DashboardResponse {
 
 export interface ApiResponse<T = unknown> {
   data?: T;
+  success: boolean;
   error?: string;
   message?: string;
   details?: Record<string, unknown>;

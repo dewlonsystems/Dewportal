@@ -85,6 +85,7 @@ export async function getUsersAction(filters?: {
     });
 
     return {
+      success: true,
       data: response.data,
       status: 200,
     };
@@ -93,6 +94,7 @@ export async function getUsersAction(filters?: {
     errorLog('Get users failed', error);
     const apiError = error as ApiError;
     return {
+      success: false,
       error: apiError.message || 'Failed to fetch users',
       status_code: apiError.status,
     };
@@ -115,6 +117,7 @@ export async function getUserDetailAction(userId: number): Promise<ApiResponse<U
     );
 
     return {
+      success: true,
       data: response.data,
       status: 200,
     };
@@ -123,6 +126,7 @@ export async function getUserDetailAction(userId: number): Promise<ApiResponse<U
     errorLog('Get user detail failed', error);
     const apiError = error as ApiError;
     return {
+      success: false,
       error: apiError.message || 'Failed to fetch user',
       status_code: apiError.status,
     };
@@ -154,6 +158,7 @@ export async function createUserAction(
     revalidatePath('/dashboard/users');
 
     return {
+      success: true,
       data: response.data,
       status: 201,
       message: 'User created successfully',
@@ -163,6 +168,7 @@ export async function createUserAction(
     errorLog('Create user failed', error);
     const apiError = error as ApiError;
     return {
+      success: false,
       error: apiError.message || 'Failed to create user',
       details: apiError.details,
       status_code: apiError.status,
@@ -197,6 +203,7 @@ export async function updateUserAction(
     revalidatePath('/dashboard/profile');
 
     return {
+      success: true,
       data: response.data,
       status: 200,
       message: 'User updated successfully',
@@ -206,6 +213,7 @@ export async function updateUserAction(
     errorLog('Update user failed', error);
     const apiError = error as ApiError;
     return {
+      success: false,
       error: apiError.message || 'Failed to update user',
       details: apiError.details,
       status_code: apiError.status,
@@ -229,9 +237,10 @@ export async function deleteUserAction(userId: number): Promise<ApiResponse<void
 
     debugLog('User deleted', { userId });
 
-    revalidatePath('/dashboard/users');
+    revalidatePath('/users');
 
     return {
+      success: true,
       status: 200,
       message: 'User deleted successfully',
     };
@@ -240,6 +249,7 @@ export async function deleteUserAction(userId: number): Promise<ApiResponse<void
     errorLog('Delete user failed', error);
     const apiError = error as ApiError;
     return {
+      success: false,
       error: apiError.message || 'Failed to delete user',
       status_code: apiError.status,
     };
@@ -267,9 +277,10 @@ export async function userActionAction(
 
     debugLog('User action completed', { userId, action });
 
-    revalidatePath('/dashboard/users');
+    revalidatePath('/users');
 
     return {
+      success: true,
       status: 200,
       message: `User ${action} successfully`,
     };
@@ -278,6 +289,7 @@ export async function userActionAction(
     errorLog('User action failed', error);
     const apiError = error as ApiError;
     return {
+      success: false,
       error: apiError.message || `Failed to ${action} user`,
       status_code: apiError.status,
     };
@@ -299,6 +311,7 @@ export async function getProfileAction(): Promise<ApiResponse<UserResponse>> {
     });
 
     return {
+      success: true,
       data: response.data,
       status: 200,
     };
@@ -307,6 +320,7 @@ export async function getProfileAction(): Promise<ApiResponse<UserResponse>> {
     errorLog('Get profile failed', error);
     const apiError = error as ApiError;
     return {
+      success: false,
       error: apiError.message || 'Failed to fetch profile',
       status_code: apiError.status,
     };
@@ -335,9 +349,10 @@ export async function updateProfileAction(
 
     debugLog('Profile updated');
 
-    revalidatePath('/dashboard/profile');
+    revalidatePath('/profile');
 
     return {
+      success: true,
       data: response.data,
       status: 200,
       message: 'Profile updated successfully',
@@ -347,6 +362,7 @@ export async function updateProfileAction(
     errorLog('Update profile failed', error);
     const apiError = error as ApiError;
     return {
+      success: false,
       error: apiError.message || 'Failed to update profile',
       details: apiError.details,
       status_code: apiError.status,
@@ -377,6 +393,7 @@ export async function staffPasswordResetRequestAction(
     debugLog('Password reset request submitted');
 
     return {
+      success: true,
       status: 200,
       message: 'Password reset request submitted. Admin will review.',
     };
@@ -385,6 +402,7 @@ export async function staffPasswordResetRequestAction(
     errorLog('Password reset request failed', error);
     const apiError = error as ApiError;
     return {
+      success: false,
       error: apiError.message || 'Failed to submit password reset request',
       status_code: apiError.status,
     };
@@ -407,6 +425,7 @@ export async function getPasswordResetRequestsAction(): Promise<ApiResponse<Pass
     );
 
     return {
+      success: true,
       data: response.data,
       status: 200,
     };
@@ -415,6 +434,7 @@ export async function getPasswordResetRequestsAction(): Promise<ApiResponse<Pass
     errorLog('Get password reset requests failed', error);
     const apiError = error as ApiError;
     return {
+      success: false,
       error: apiError.message || 'Failed to fetch password reset requests',
       status_code: apiError.status,
     };
@@ -443,9 +463,10 @@ export async function passwordResetRequestActionAction(
 
     debugLog('Password reset request processed', { requestId, action });
 
-    revalidatePath('/dashboard/users');
+    revalidatePath('/users');
 
     return {
+      success: true,
       status: 200,
       message: `Password reset request ${action}d`,
     };
@@ -454,6 +475,7 @@ export async function passwordResetRequestActionAction(
     errorLog('Password reset request action failed', error);
     const apiError = error as ApiError;
     return {
+      success: false,
       error: apiError.message || `Failed to ${action} password reset request`,
       status_code: apiError.status,
     };

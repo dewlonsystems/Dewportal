@@ -65,22 +65,20 @@ export function useAuth(): UseAuthReturn {
 
       const result = await loginAction(data);
 
-      if (result.error) {
-        setError(result.error);
+      // ✅ Check explicit success flag from server action
+      if (result.success === false || result.error) {
+        setError(result.error || 'Login failed');
         setLoading(false);
         return result;
       }
 
-      // ✅ FIX: Populate store immediately after successful login
-      // Prevents UI flicker before AuthProvider re-verifies session
-      // Uses same safe mapping pattern as AuthProvider.tsx
-      if (result.data?.user) {
+      // ✅ Only proceed if backend explicitly confirmed success
+      if (result.success === true && result.data?.user) {
         const apiUser = result.data.user;
         const fullUser: User = {
           id: apiUser.id,
           username: apiUser.username,
           email: apiUser.email,
-          // ✅ Safe access using Partial<User> assertion (matches AuthProvider pattern)
           first_name: (apiUser as Partial<User>).first_name || apiUser.username,
           last_name: (apiUser as Partial<User>).last_name || '',
           role: apiUser.role,
@@ -101,11 +99,12 @@ export function useAuth(): UseAuthReturn {
       setLoading(false);
       return result;
 
-    } catch (error) {
-      errorLog('useAuth: Login failed', error);
-      setError(error instanceof Error ? error.message : 'Invalid credentials');
+    } catch (err) {
+      errorLog('useAuth: Login failed', err);
+      const message = err instanceof Error ? err.message : 'Invalid credentials';
+      setError(message);
       setLoading(false);
-      return { error: 'Invalid credentials' };
+      return { success: false, error: message };
     }
   }, [setLoading, setError, setUser, setAuthenticated, setStoreMustChangePassword]);
 
@@ -117,12 +116,12 @@ export function useAuth(): UseAuthReturn {
     try {
       debugLog('useAuth: Logout');
       await logoutAction();
-      // ✅ FIX: Clear store immediately instead of waiting for AuthProvider
+      // ✅ Clear store immediately instead of waiting for AuthProvider
       setUser(null);
       setAuthenticated(false);
       setStoreMustChangePassword(false);
-    } catch (error) {
-      errorLog('useAuth: Logout failed', error);
+    } catch (err) {
+      errorLog('useAuth: Logout failed', err);
     }
   }, [setUser, setAuthenticated, setStoreMustChangePassword]);
 
@@ -138,22 +137,27 @@ export function useAuth(): UseAuthReturn {
 
       const result = await forcePasswordChangeAction(data);
 
-      if (result.error) {
-        setError(result.error);
+      // ✅ Check explicit success flag
+      if (result.success === false || result.error) {
+        setError(result.error || 'Password change failed');
         setLoading(false);
         return result;
       }
 
-      // Update store
-      useAuthStore.getState().setMustChangePassword(false);
+      // ✅ Only update store on explicit success
+      if (result.success === true) {
+        useAuthStore.getState().setMustChangePassword(false);
+      }
+      
       setLoading(false);
       return result;
 
-    } catch (error) {
-      errorLog('useAuth: Force password change failed', error);
-      setError(error instanceof Error ? error.message : 'Password change failed');
+    } catch (err) {
+      errorLog('useAuth: Force password change failed', err);
+      const message = err instanceof Error ? err.message : 'Password change failed';
+      setError(message);
       setLoading(false);
-      return { error: 'Password change failed' };
+      return { success: false, error: message };
     }
   }, [setLoading, setError]);
 
@@ -169,8 +173,9 @@ export function useAuth(): UseAuthReturn {
 
       const result = await changePasswordAction(data);
 
-      if (result.error) {
-        setError(result.error);
+      // ✅ Check explicit success flag
+      if (result.success === false || result.error) {
+        setError(result.error || 'Password change failed');
         setLoading(false);
         return result;
       }
@@ -178,11 +183,12 @@ export function useAuth(): UseAuthReturn {
       setLoading(false);
       return result;
 
-    } catch (error) {
-      errorLog('useAuth: Change password failed', error);
-      setError(error instanceof Error ? error.message : 'Password change failed');
+    } catch (err) {
+      errorLog('useAuth: Change password failed', err);
+      const message = err instanceof Error ? err.message : 'Password change failed';
+      setError(message);
       setLoading(false);
-      return { error: 'Password change failed' };
+      return { success: false, error: message };
     }
   }, [setLoading, setError]);
 
@@ -197,7 +203,8 @@ export function useAuth(): UseAuthReturn {
 
       const result = await verifySessionAction();
 
-      if (result.error) {
+      // ✅ Check explicit success flag
+      if (result.success === false || result.error) {
         setIsVerifying(false);
         return result;
       }
@@ -205,10 +212,10 @@ export function useAuth(): UseAuthReturn {
       setIsVerifying(false);
       return result;
 
-    } catch (error) {
-      errorLog('useAuth: Session verification failed', error);
+    } catch (err) {
+      errorLog('useAuth: Session verification failed', err);
       setIsVerifying(false);
-      return { error: 'Session verification failed' };
+      return { success: false, error: 'Session verification failed' };
     }
   }, []);
 

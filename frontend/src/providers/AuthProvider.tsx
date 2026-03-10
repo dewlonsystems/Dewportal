@@ -37,14 +37,16 @@ function mapSessionToUser(sessionUser: SessionVerifyResponse['user']): User {
     id: sessionUser.id,
     username: sessionUser.username,
     email: sessionUser.email,
-    first_name: (sessionUser as Partial<User>).first_name || sessionUser.username,
-    last_name: (sessionUser as Partial<User>).last_name || sessionUser.username,
+    first_name: sessionUser.first_name || sessionUser.username,
+    last_name: sessionUser.last_name || '',
+    phone_number: sessionUser.phone_number ?? null, 
     role: sessionUser.role,
-    is_active: true,
-    is_locked: false,
+    is_active: sessionUser.is_active ?? true,  
+    is_locked: sessionUser.is_locked ?? false,
+    last_seen: sessionUser.last_seen ?? null, 
     must_change_password: (sessionUser as Partial<User>).must_change_password || false,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
+    created_at: sessionUser.created_at || new Date().toISOString(),
+    updated_at: sessionUser.updated_at || new Date().toISOString(), 
   };
 }
 

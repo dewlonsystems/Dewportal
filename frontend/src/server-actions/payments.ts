@@ -78,6 +78,7 @@ export async function initiatePaymentAction(
     revalidatePath('/dashboard/payments');
 
     return {
+      success: true,
       data: response.data,
       status: 200,
     };
@@ -86,6 +87,7 @@ export async function initiatePaymentAction(
     errorLog('Initiate payment failed', error);
     const apiError = error as ApiError;
     return {
+      success: false,
       error: apiError.message || 'Payment initiation failed',
       details: apiError.details,
       status_code: apiError.status,
@@ -131,6 +133,7 @@ export async function getTransactionsAction(filters?: {
     });
 
     return {
+      success: true,
       data: response.data,
       status: 200,
     };
@@ -139,6 +142,7 @@ export async function getTransactionsAction(filters?: {
     errorLog('Get transactions failed', error);
     const apiError = error as ApiError;
     return {
+      success: false,
       error: apiError.message || 'Failed to fetch transactions',
       status_code: apiError.status,
     };
@@ -163,6 +167,7 @@ export async function getTransactionDetailAction(
     );
 
     return {
+      success: true,
       data: response.data,
       status: 200,
     };
@@ -171,6 +176,7 @@ export async function getTransactionDetailAction(
     errorLog('Get transaction detail failed', error);
     const apiError = error as ApiError;
     return {
+      success: false,
       error: apiError.message || 'Failed to fetch transaction',
       status_code: apiError.status,
     };
@@ -193,6 +199,7 @@ export async function getTransactionSummaryAction(): Promise<ApiResponse<Transac
     );
 
     return {
+      success: true,
       data: response.data,
       status: 200,
     };
@@ -201,6 +208,7 @@ export async function getTransactionSummaryAction(): Promise<ApiResponse<Transac
     errorLog('Get transaction summary failed', error);
     const apiError = error as ApiError;
     return {
+      success: false,
       error: apiError.message || 'Failed to fetch transaction summary',
       status_code: apiError.status,
     };
