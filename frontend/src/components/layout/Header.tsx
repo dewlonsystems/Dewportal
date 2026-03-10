@@ -378,7 +378,7 @@ export function Header({ onMenuToggle, isMobileMenuOpen }: HeaderProps) {
 
               {/* ── Notification panel ─────────────────────────── */}
               {isNotifOpen && (
-                <div className="absolute left-1/2 -translate-x-1/2 sm:right-0 sm:translate-x-0 top-full mt-2 w-[340px] sm:w-[380px] max-w-[calc(100vw-2rem)] bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50">
+                <div className="absolute right-0 top-full mt-2 w-[380px] max-w-[calc(100vw-1rem)] bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50">
                   {/* Panel header */}
                   <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                     <div className="flex items-center gap-2">
