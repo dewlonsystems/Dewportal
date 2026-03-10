@@ -8,6 +8,7 @@ import { LoginForm } from '@/components/forms';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
+import { useAuthStore } from '@/stores/useAuthStore';
 import Image from 'next/image';
 
 // -----------------------------------------------------------------------------
@@ -17,21 +18,24 @@ import Image from 'next/image';
 export default function LoginPage() {
   const router = useRouter();
   const { isAuthenticated, mustChangePassword } = useAuth();
+  const isInitialized = useAuthStore((s) => s.isInitialized);
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
     setIsLoaded(true);
-    
-    // Redirect if already authenticated
+
+    if (!isInitialized) return;
+
+    // Only bounce already-authenticated users away on page load.
+    // LoginForm handles the redirect after a fresh login itself.
     if (isAuthenticated && !mustChangePassword) {
-      router.push('/dashboard/dashboard');
-    } else if (mustChangePassword) {
-      router.push('/force-password-change');
+      router.replace('/dashboard/dashboard');
+    } else if (isAuthenticated && mustChangePassword) {
+      router.replace('/force-password-change');
     }
-  }, [isAuthenticated, mustChangePassword, router]);
+  }, [isInitialized]); // ✅ Run once on mount only, not on every auth change
 
   return (
-    // ✅ FIXED: Full viewport background with scrollable content
     <div 
       className="fixed inset-0 w-full h-full overflow-y-auto bg-[#f7f4ef]"
       style={{
@@ -42,10 +46,10 @@ export default function LoginPage() {
         backgroundAttachment: 'fixed',
       }}
     >
-      {/* ✅ FIXED OVERLAY: Stays in place, doesn't scroll with content */}
+      {/* OVERLAY */}
       <div className="fixed inset-0 bg-gradient-to-br from-white/30 via-white/20 to-white/40 backdrop-blur-[2px]" />
 
-      {/* ✅ FIXED ANIMATED ELEMENTS: Stay in place */}
+      {/* ANIMATED ELEMENTS */}
       <div className="fixed inset-0 overflow-hidden">
         {[...Array(15)].map((_, i) => (
           <div
@@ -63,10 +67,10 @@ export default function LoginPage() {
         ))}
       </div>
 
-      {/* ✅ SCROLLABLE CONTENT CONTAINER */}
+      {/* SCROLLABLE CONTENT CONTAINER */}
       <div className="relative z-10 min-h-screen flex items-center justify-center py-12 px-4">
         
-        {/* ✅ LOGIN CARD */}
+        {/* LOGIN CARD */}
         <div
           className={`w-full max-w-md transform transition-all duration-1000 ${
             isLoaded ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'
@@ -77,7 +81,6 @@ export default function LoginPage() {
             
             {/* Card Header */}
             <div className="bg-gradient-to-r from-primary to-primary-light px-8 py-8 text-center">
-              {/* ✅ LOGO - White background for maximum contrast */}
               <div className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-xl overflow-hidden">
                 <Image
                   src="/logo.png"
@@ -88,8 +91,6 @@ export default function LoginPage() {
                   priority
                 />
               </div>
-              
-              {/* Title */}
               <h1 className="text-2xl font-bold text-white mb-1">Welcome Back</h1>
               <p className="text-white/80 text-sm">Sign in to your account</p>
             </div>
@@ -102,7 +103,6 @@ export default function LoginPage() {
             {/* Card Footer */}
             <div className="px-8 pb-8 pt-2">
               <div className="border-t border-border pt-6">
-                {/* Help Text */}
                 <p className="text-center text-sm text-text-muted mb-4">
                   Having trouble signing in?{' '}
                   <a
@@ -120,7 +120,7 @@ export default function LoginPage() {
           <div className="absolute -bottom-4 left-4 right-4 h-8 bg-gradient-to-b from-black/10 to-transparent rounded-b-3xl blur-sm" />
         </div>
 
-        {/* ✅ BACK TO HOME - Fixed position, stays visible on scroll */}
+        {/* BACK TO HOME */}
         <button
           onClick={() => router.push('/')}
           className={`fixed top-6 left-6 z-20 flex items-center gap-2 text-white/70 hover:text-white transition-all duration-300 ${

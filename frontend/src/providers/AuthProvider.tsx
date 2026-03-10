@@ -18,6 +18,7 @@ import { verifySessionAction, refreshAccessTokenAction } from '@/server-actions'
 import { debugLog, errorLog } from '@/lib/utils';
 import { SESSION_CONFIG } from '@/constants/config';
 import { User, SessionVerifyResponse } from '@/types';
+import { Spinner } from '@/components/ui';
 
 // -----------------------------------------------------------------------------
 // Types
@@ -69,7 +70,6 @@ export function AuthProvider({ children }: AuthProviderProps): ReactElement {
     try {
       debugLog('AuthProvider: Initializing session');
 
-      // Verify current session
       const sessionResult = await verifySessionAction();
 
       if (sessionResult.error || !sessionResult.data) {
@@ -80,7 +80,6 @@ export function AuthProvider({ children }: AuthProviderProps): ReactElement {
         return;
       }
 
-      // Map session response to full User type
       const fullUser = mapSessionToUser(sessionResult.data.user);
 
       setUser(fullUser);
@@ -153,7 +152,6 @@ export function AuthProvider({ children }: AuthProviderProps): ReactElement {
 
     if (!isAuthenticated) return;
 
-    // Set up token refresh interval
     const refreshInterval = setInterval(
       refreshToken,
       SESSION_CONFIG.REFRESH_THRESHOLD
@@ -173,23 +171,28 @@ export function AuthProvider({ children }: AuthProviderProps): ReactElement {
 
     if (!isAuthenticated) return;
 
-    // Track activity events
     const events = ['mousedown', 'keydown', 'scroll', 'touchstart'];
 
-    const handleActivity = () => {
-      handleUserActivity();
-    };
+    const handleActivity = () => handleUserActivity();
 
-    events.forEach((event) => {
-      window.addEventListener(event, handleActivity);
-    });
+    events.forEach((event) => window.addEventListener(event, handleActivity));
 
     return () => {
-      events.forEach((event) => {
-        window.removeEventListener(event, handleActivity);
-      });
+      events.forEach((event) => window.removeEventListener(event, handleActivity));
     };
   }, [handleUserActivity]);
+
+  // ---------------------------------------------------------------------------
+  // ✅ FIX: Block rendering until session is verified
+  // ---------------------------------------------------------------------------
+
+  if (!isInitialized) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-[#f7f4ef]">
+        <Spinner size="lg" color="primary" />
+      </div>
+    );
+  }
 
   // ---------------------------------------------------------------------------
   // Render

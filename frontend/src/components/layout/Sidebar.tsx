@@ -88,8 +88,9 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
   const router = useRouter();
   const { user } = useAuth();
 
+  // ✅ FIXED: Show all items while user is loading, then filter by role
   const filteredItems = NAV_ITEMS.filter((item) => {
-    if (!user?.role) return false;
+    if (!user?.role) return true;
     return item.roles.some((role) => role === user.role);
   });
 
@@ -98,7 +99,6 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
     onClose?.();
   };
 
-  // Split nav into main items and profile
   const mainItems = filteredItems.filter((i) => i.path !== DASHBOARD_ROUTES.PROFILE);
   const profileItem = filteredItems.find((i) => i.path === DASHBOARD_ROUTES.PROFILE);
 
@@ -122,10 +122,9 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
           isOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
-        {/* ── Brand ────────────────────────────────────────────────── */}
+        {/* Brand */}
         <div className="flex items-center justify-between h-16 px-5 border-b border-white/10">
           <div className="flex items-center gap-3">
-            {/* Logo mark */}
             <div className="relative w-8 h-8 flex-shrink-0">
               <div className="absolute inset-0 bg-[#c45c1a] rounded-lg rotate-3" />
               <div className="absolute inset-0 bg-[#c45c1a]/80 rounded-lg -rotate-1" />
@@ -155,14 +154,14 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
           </button>
         </div>
 
-        {/* ── Navigation label ─────────────────────────────────────── */}
+        {/* Navigation label */}
         <div className="px-5 pt-6 pb-2">
           <p className="text-[10px] font-semibold uppercase tracking-widest text-white/30">
             Navigation
           </p>
         </div>
 
-        {/* ── Main nav ─────────────────────────────────────────────── */}
+        {/* Main nav */}
         <nav className="flex-1 overflow-y-auto px-3 pb-4">
           <ul className="space-y-0.5">
             {mainItems.map((item) => {
@@ -181,15 +180,12 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
                         : 'text-white/60 hover:text-white hover:bg-white/8'
                     )}
                   >
-                    {/* Active indicator bar */}
                     <span
                       className={cn(
                         'absolute left-0 w-0.5 h-5 rounded-r-full bg-[#c45c1a] transition-opacity duration-150',
                         isActive ? 'opacity-100' : 'opacity-0'
                       )}
                     />
-
-                    {/* Icon */}
                     <span
                       className={cn(
                         'flex-shrink-0 transition-colors duration-150',
@@ -198,11 +194,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
                     >
                       {item.icon}
                     </span>
-
-                    {/* Label */}
                     <span className="flex-1 text-left">{item.label}</span>
-
-                    {/* Admin badge */}
                     {item.adminBadge && (
                       <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#c45c1a]/20 text-[#c45c1a]">
                         Admin
@@ -214,7 +206,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
             })}
           </ul>
 
-          {/* ── Profile section ────────────────────────────────────── */}
+          {/* Profile section */}
           {profileItem && (
             <>
               <div className="my-4 border-t border-white/10" />
@@ -247,10 +239,9 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
           )}
         </nav>
 
-        {/* ── User footer ──────────────────────────────────────────── */}
+        {/* User footer */}
         <div className="p-3 border-t border-white/10">
           <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-white/6 hover:bg-white/10 transition-colors cursor-default">
-            {/* Avatar */}
             <div className="relative flex-shrink-0">
               <div className="w-8 h-8 rounded-full bg-[#c45c1a]/20 border border-[#c45c1a]/30 flex items-center justify-center">
                 <span className="text-[#c45c1a] font-semibold text-sm">
@@ -259,7 +250,6 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
                     'U'}
                 </span>
               </div>
-              {/* Online dot */}
               <span className="absolute bottom-0 right-0 w-2 h-2 bg-green-400 rounded-full border border-[#1a3d2b]" />
             </div>
 
@@ -267,14 +257,13 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
               <p className="text-sm font-medium text-white truncate leading-tight">
                 {user?.first_name
                   ? `${user.first_name} ${user.last_name || ''}`.trim()
-                  : user?.username}
+                  : user?.username || '...'}
               </p>
               <p className="text-[11px] text-white/40 capitalize leading-tight mt-0.5">
-                {user?.role}
+                {user?.role || '...'}
               </p>
             </div>
 
-            {/* Role badge */}
             <span
               className={cn(
                 'flex-shrink-0 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded',
@@ -283,7 +272,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
                   : 'bg-white/10 text-white/50'
               )}
             >
-              {user?.role}
+              {user?.role || '...'}
             </span>
           </div>
         </div>

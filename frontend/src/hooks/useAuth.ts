@@ -51,7 +51,7 @@ export function useAuth(): UseAuthReturn {
   const mustChangePassword = useAuthStore(selectMustChangePassword);
   const error = useAuthStore(selectAuthError);
 
-  const { setUser, setAuthenticated, setLoading, setError, clearError: clearStoreError } = useAuthStore();
+  const { setUser, setAuthenticated, setLoading, setError, clearError: clearStoreError, setMustChangePassword: setStoreMustChangePassword } = useAuthStore();
 
   // ---------------------------------------------------------------------------
   // Login
@@ -71,7 +71,33 @@ export function useAuth(): UseAuthReturn {
         return result;
       }
 
-      // User will be set by AuthProvider after session verification
+      // ✅ FIX: Populate store immediately after successful login
+      // Prevents UI flicker before AuthProvider re-verifies session
+      // Uses same safe mapping pattern as AuthProvider.tsx
+      if (result.data?.user) {
+        const apiUser = result.data.user;
+        const fullUser: User = {
+          id: apiUser.id,
+          username: apiUser.username,
+          email: apiUser.email,
+          // ✅ Safe access using Partial<User> assertion (matches AuthProvider pattern)
+          first_name: (apiUser as Partial<User>).first_name || apiUser.username,
+          last_name: (apiUser as Partial<User>).last_name || '',
+          role: apiUser.role,
+          is_active: true,
+          is_locked: false,
+          must_change_password: (apiUser as Partial<User>).must_change_password || false,
+          created_at: (apiUser as Partial<User>).created_at || new Date().toISOString(),
+          updated_at: (apiUser as Partial<User>).updated_at || new Date().toISOString(),
+        };
+        
+        setUser(fullUser);
+        setAuthenticated(true);
+        if (fullUser.must_change_password) {
+          setStoreMustChangePassword(true);
+        }
+      }
+
       setLoading(false);
       return result;
 
@@ -81,7 +107,7 @@ export function useAuth(): UseAuthReturn {
       setLoading(false);
       return { error: 'Invalid credentials' };
     }
-  }, [setLoading, setError]);
+  }, [setLoading, setError, setUser, setAuthenticated, setStoreMustChangePassword]);
 
   // ---------------------------------------------------------------------------
   // Logout
@@ -91,11 +117,14 @@ export function useAuth(): UseAuthReturn {
     try {
       debugLog('useAuth: Logout');
       await logoutAction();
-      // AuthProvider will handle clearing state
+      // ✅ FIX: Clear store immediately instead of waiting for AuthProvider
+      setUser(null);
+      setAuthenticated(false);
+      setStoreMustChangePassword(false);
     } catch (error) {
       errorLog('useAuth: Logout failed', error);
     }
-  }, []);
+  }, [setUser, setAuthenticated, setStoreMustChangePassword]);
 
   // ---------------------------------------------------------------------------
   // Force Password Change

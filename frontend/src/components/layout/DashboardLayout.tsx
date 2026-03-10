@@ -8,15 +8,11 @@
 'use client';
 
 import { useState, useEffect, type ReactNode } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/hooks/useAuth';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import { Header } from './Header';
 import { Sidebar } from './Sidebar';
-import { MobileMenu } from './MobileMenu';
-import { Spinner, Alert } from '@/components/ui';
+import { Alert } from '@/components/ui';
 import { cn } from '@/lib/utils';
-import { AUTH_ROUTES } from '@/constants/routes';
 
 // -----------------------------------------------------------------------------
 // Types
@@ -39,31 +35,9 @@ export function DashboardLayout({
   description,
   action,
 }: DashboardLayoutProps) {
-  const router = useRouter();
-  const { user, isAuthenticated, isLoading, mustChangePassword } = useAuth();
   const { connectionError } = useWebSocket();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [wsErrorDismissed, setWsErrorDismissed] = useState(false);
-
-  // ---------------------------------------------------------------------------
-  // Redirect if not authenticated
-  // ---------------------------------------------------------------------------
-
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      router.replace(AUTH_ROUTES.LOGIN);
-    }
-  }, [isLoading, isAuthenticated, router]);
-
-  // ---------------------------------------------------------------------------
-  // Redirect if must change password
-  // ---------------------------------------------------------------------------
-
-  useEffect(() => {
-    if (!isLoading && isAuthenticated && mustChangePassword) {
-      router.replace(AUTH_ROUTES.FORCE_PASSWORD_CHANGE);
-    }
-  }, [isLoading, isAuthenticated, mustChangePassword, router]);
 
   // ---------------------------------------------------------------------------
   // Reset WS error banner when connection is restored
@@ -76,51 +50,14 @@ export function DashboardLayout({
   }, [connectionError]);
 
   // ---------------------------------------------------------------------------
-  // Loading State
-  // ---------------------------------------------------------------------------
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-3">
-          <Spinner size="lg" />
-          <p className="text-sm text-text-muted">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Not authenticated — render nothing while redirect fires
-  // ---------------------------------------------------------------------------
-
-  if (!isAuthenticated || !user) {
-    return null;
-  }
-
-  // ---------------------------------------------------------------------------
-  // Must change password — render nothing while redirect fires
-  // ---------------------------------------------------------------------------
-
-  if (mustChangePassword) {
-    return null;
-  }
-
-  // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Mobile Menu */}
-      <MobileMenu
-        isOpen={isMobileMenuOpen}
-        onClose={() => setIsMobileMenuOpen(false)}
-      />
-
       {/* Sidebar (Desktop) */}
       <Sidebar
-        isOpen={true}
+        isOpen={isMobileMenuOpen}
         onClose={() => setIsMobileMenuOpen(false)}
       />
 

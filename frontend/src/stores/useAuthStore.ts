@@ -171,6 +171,7 @@ export const useAuthStore = create<AuthState>()(
         isAuthenticated: state.isAuthenticated,
         mustChangePassword: state.mustChangePassword,
         lastActivity: state.lastActivity,
+        isInitialized: state.isInitialized,
       }),
       onRehydrateStorage: () => {
         return (state, error) => {
