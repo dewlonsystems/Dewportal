@@ -50,6 +50,7 @@ export async function getDashboardDataAction(): Promise<ApiResponse<DashboardRes
     });
 
     return {
+      success: true,
       data: response.data,
       status: 200,
     };
@@ -59,6 +60,7 @@ export async function getDashboardDataAction(): Promise<ApiResponse<DashboardRes
 
     const apiError = error as ApiError;
     return {
+      success: false,
       error: apiError.message || 'Failed to fetch dashboard data',
       status_code: apiError.status,
     };

@@ -62,6 +62,7 @@ export async function getAuditLogsAction(filters?: {
     });
 
     return {
+      success: true,
       data: response.data,
       status: 200,
     };
@@ -70,6 +71,7 @@ export async function getAuditLogsAction(filters?: {
     errorLog('Get audit logs failed', error);
     const apiError = error as ApiError;
     return {
+      success: false,
       error: apiError.message || 'Failed to fetch audit logs',
       status_code: apiError.status,
     };
@@ -91,6 +93,7 @@ export async function getAuditSummaryAction(): Promise<ApiResponse<AuditSummary>
     });
 
     return {
+      success: true,
       data: response.data,
       status: 200,
     };
@@ -99,6 +102,7 @@ export async function getAuditSummaryAction(): Promise<ApiResponse<AuditSummary>
     errorLog('Get audit summary failed', error);
     const apiError = error as ApiError;
     return {
+      success: false,
       error: apiError.message || 'Failed to fetch audit summary',
       status_code: apiError.status,
     };
@@ -121,6 +125,7 @@ export async function getUserLastSeenAction(): Promise<ApiResponse<UserLastSeenR
     );
 
     return {
+      success: true,
       data: response.data,
       status: 200,
     };
@@ -129,6 +134,7 @@ export async function getUserLastSeenAction(): Promise<ApiResponse<UserLastSeenR
     errorLog('Get user last seen failed', error);
     const apiError = error as ApiError;
     return {
+      success: false,
       error: apiError.message || 'Failed to fetch user last seen data',
       status_code: apiError.status,
     };

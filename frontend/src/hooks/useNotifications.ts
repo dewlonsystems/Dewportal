@@ -74,11 +74,17 @@ export function useNotifications(): UseNotificationsReturn {
       // TODO: Call API to persist read status
       // await markNotificationReadAction(notificationId);
 
-      return { status: 200 };
+      return {
+        success: true,
+        status: 200 
+      };
 
     } catch (error) {
       errorLog('useNotifications: Mark as read failed', error);
-      return { error: 'Failed to mark notification as read' };
+      return { 
+        success: false,
+        error: 'Failed to mark notification as read' 
+      };
     }
   }, [storeMarkAsRead]);
 
@@ -96,11 +102,17 @@ export function useNotifications(): UseNotificationsReturn {
       // TODO: Call API to persist read status
       // await markAllNotificationsReadAction();
 
-      return { status: 200 };
+      return {
+        success: true,
+        status: 200
+      };
 
     } catch (error) {
       errorLog('useNotifications: Mark all as read failed', error);
-      return { error: 'Failed to mark all notifications as read' };
+      return {
+        success: false,
+        error: 'Failed to mark all notifications as read' 
+      };
     }
   }, [storeMarkAllAsRead]);
 
