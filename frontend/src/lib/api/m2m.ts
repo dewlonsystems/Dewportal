@@ -34,19 +34,24 @@ const M2M_CONFIG = {
 } as const;
 
 // -----------------------------------------------------------------------------
-// Cache
+// ✅ FIXED: Global cache that persists across Next.js module reloads
 // -----------------------------------------------------------------------------
 
-let cachedPrivateKey: string | null = null;
-let tokenCache: M2MTokenResult | null = null;
+const globalForM2M = global as typeof globalThis & {
+  m2mPrivateKey: string | null;
+  m2mTokenCache: M2MTokenResult | null;
+};
+
+if (!globalForM2M.m2mPrivateKey) globalForM2M.m2mPrivateKey = null;
+if (!globalForM2M.m2mTokenCache) globalForM2M.m2mTokenCache = null;
 
 // -----------------------------------------------------------------------------
 // Load Private Key
 // -----------------------------------------------------------------------------
 
 export function loadPrivateKey(): string {
-  if (cachedPrivateKey) {
-    return cachedPrivateKey;
+  if (globalForM2M.m2mPrivateKey) {
+    return globalForM2M.m2mPrivateKey;
   }
 
   try {
@@ -65,9 +70,9 @@ export function loadPrivateKey(): string {
       throw new Error('Service configuration error');
     }
 
-    cachedPrivateKey = normalized;
+    globalForM2M.m2mPrivateKey = normalized;
     debugLog('Private key loaded successfully');
-    return cachedPrivateKey;
+    return globalForM2M.m2mPrivateKey;
 
   } catch (error) {
     errorLog('Failed to load private key', error);
@@ -81,9 +86,9 @@ export function loadPrivateKey(): string {
 
 export async function generateM2MToken(): Promise<string> {
   try {
-    if (tokenCache && tokenCache.expiresAt > Date.now() + 60000) {
+    if (globalForM2M.m2mTokenCache && globalForM2M.m2mTokenCache.expiresAt > Date.now() + 60000) {
       debugLog('Using cached M2M token');
-      return tokenCache.token;
+      return globalForM2M.m2mTokenCache.token;
     }
 
     const privateKey = loadPrivateKey();
@@ -111,7 +116,7 @@ export async function generateM2MToken(): Promise<string> {
       { algorithm: M2M_CONFIG.ALGORITHM } as jwt.SignOptions
     );
 
-    tokenCache = {
+    globalForM2M.m2mTokenCache = {
       token,
       expiresAt: exp * 1000,
     };
@@ -167,12 +172,12 @@ export async function getM2MHeaders(): Promise<Record<string, string>> {
 // -----------------------------------------------------------------------------
 
 export function clearTokenCache(): void {
-  tokenCache = null;
+  globalForM2M.m2mTokenCache = null;
   debugLog('Token cache cleared');
 }
 
 export function clearPrivateKeyCache(): void {
-  cachedPrivateKey = null;
+  globalForM2M.m2mPrivateKey = null;
   debugLog('Key cache cleared');
 }
 
