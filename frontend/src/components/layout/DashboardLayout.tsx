@@ -12,6 +12,7 @@ import { useWebSocket } from '@/hooks/useWebSocket';
 import { Header } from './Header';
 import { Sidebar } from './Sidebar';
 import { Alert } from '@/components/ui';
+import { NavigationProgress } from '@/components/ui/NavigationProgress';
 import { cn } from '@/lib/utils';
 
 // -----------------------------------------------------------------------------
@@ -55,6 +56,10 @@ export function DashboardLayout({
 
   return (
     <div className="min-h-screen bg-background">
+      
+      {/* Navigation Progress */}
+      <NavigationProgress />
+
       {/* Sidebar (Desktop) */}
       <Sidebar
         isOpen={isMobileMenuOpen}

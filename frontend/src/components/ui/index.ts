@@ -8,6 +8,9 @@
 export { Button } from './Button';
 export type { ButtonProps } from './Button';
 
+export { NavigationProgress } from './NavigationProgress';
+
+
 // Input
 export { Input } from './Input';
 export type { InputProps } from './Input';
