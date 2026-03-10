@@ -12,6 +12,7 @@ export function NavigationProgress() {
   const [isNavigating, setIsNavigating] = useState(false);
   const [progress, setProgress] = useState(0);
 
+  // ✅ Reset when route actually changes
   useEffect(() => {
     setIsNavigating(false);
     setProgress(100);
@@ -19,11 +20,23 @@ export function NavigationProgress() {
     return () => clearTimeout(timer);
   }, [pathname, searchParams]);
 
-  // Simulate progress on link clicks
+  // ✅ Only trigger on clicks that will actually change the route
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
-      const target = (e.target as HTMLElement).closest('a, button');
-      if (!target) return;
+      const anchor = (e.target as HTMLElement).closest('a');
+
+      // Ignore if not an anchor tag
+      if (!anchor) return;
+
+      const href = anchor.getAttribute('href');
+
+      // Ignore if no href, external link, hash link, or same page
+      if (!href) return;
+      if (href.startsWith('http')) return;
+      if (href.startsWith('#')) return;
+      if (href === pathname) return;
+
+      // ✅ Only now start the progress
       setIsNavigating(true);
       setProgress(30);
       setTimeout(() => setProgress(60), 100);
@@ -32,7 +45,7 @@ export function NavigationProgress() {
 
     document.addEventListener('click', handleClick);
     return () => document.removeEventListener('click', handleClick);
-  }, []);
+  }, [pathname]);
 
   if (!isNavigating && progress === 0) return null;
 
