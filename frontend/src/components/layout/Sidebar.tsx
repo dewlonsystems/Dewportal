@@ -1,6 +1,7 @@
 'use client';
 
-import { usePathname, useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
 import { DASHBOARD_ROUTES } from '@/constants/routes';
@@ -85,19 +86,13 @@ const NAV_ITEMS: NavItem[] = [
 
 export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
   const pathname = usePathname();
-  const router = useRouter();
   const { user } = useAuth();
 
-  // ✅ FIXED: Show all items while user is loading, then filter by role
+  // ✅ Show all items while user is loading, then filter by role
   const filteredItems = NAV_ITEMS.filter((item) => {
     if (!user?.role) return true;
     return item.roles.some((role) => role === user.role);
   });
-
-  const handleNavigate = (path: string) => {
-    router.push(path);
-    onClose?.();
-  };
 
   const mainItems = filteredItems.filter((i) => i.path !== DASHBOARD_ROUTES.PROFILE);
   const profileItem = filteredItems.find((i) => i.path === DASHBOARD_ROUTES.PROFILE);
@@ -171,10 +166,12 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
 
               return (
                 <li key={item.path}>
-                  <button
-                    onClick={() => handleNavigate(item.path)}
+                  {/* ✅ Link instead of button — NavigationProgress can detect it */}
+                  <Link
+                    href={item.path}
+                    onClick={onClose} // ✅ closes mobile sidebar on navigate
                     className={cn(
-                      'group w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150',
+                      'group relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150',
                       isActive
                         ? 'bg-white/12 text-white shadow-sm'
                         : 'text-white/60 hover:text-white hover:bg-white/8'
@@ -200,7 +197,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
                         Admin
                       </span>
                     )}
-                  </button>
+                  </Link>
                 </li>
               );
             })}
@@ -212,10 +209,11 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
               <div className="my-4 border-t border-white/10" />
               <ul>
                 <li>
-                  <button
-                    onClick={() => handleNavigate(profileItem.path)}
+                  <Link
+                    href={profileItem.path}
+                    onClick={onClose} // ✅ closes mobile sidebar on navigate
                     className={cn(
-                      'group w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150',
+                      'group relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150',
                       pathname === profileItem.path
                         ? 'bg-white/12 text-white'
                         : 'text-white/60 hover:text-white hover:bg-white/8'
@@ -232,7 +230,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
                       {profileItem.icon}
                     </span>
                     <span className="flex-1 text-left">{profileItem.label}</span>
-                  </button>
+                  </Link>
                 </li>
               </ul>
             </>
