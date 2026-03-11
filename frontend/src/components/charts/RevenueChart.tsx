@@ -1,23 +1,18 @@
 // =============================================================================
 // DEWPORTAL FRONTEND - REVENUE CHART
 // =============================================================================
-// Line chart showing revenue trends over time.
-// =============================================================================
 
 'use client';
 
 import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
   Area,
   AreaChart,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
 } from 'recharts';
-import { ChartContainer } from './ChartContainer';
 import { formatCurrency } from '@/lib/utils';
 
 // -----------------------------------------------------------------------------
@@ -47,21 +42,26 @@ export function RevenueChart({
   data,
   isLoading,
   error,
-  title = 'Revenue Overview',
-  description = 'Revenue trends over time',
-  period = '30d',
 }: RevenueChartProps) {
-  // Custom tooltip component
-  const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: any[]; label?: string }) => {
+
+  const CustomTooltip = ({
+    active,
+    payload,
+    label,
+  }: {
+    active?: boolean;
+    payload?: any[];
+    label?: string;
+  }) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-surface border border-border rounded-lg p-3 shadow-lg">
-          <p className="text-sm font-medium text-text mb-1">{label}</p>
-          <p className="text-sm text-primary font-semibold">
+        <div className="bg-white border border-gray-100 rounded-lg p-3 shadow-lg">
+          <p className="text-sm font-medium text-gray-700 mb-1">{label}</p>
+          <p className="text-sm font-semibold text-orange-600">
             {formatCurrency(payload[0].value)}
           </p>
-          {payload[0].payload.transactions && (
-            <p className="text-xs text-text-muted mt-1">
+          {payload[0].payload.transactions > 0 && (
+            <p className="text-xs text-gray-400 mt-1">
               {payload[0].payload.transactions} transactions
             </p>
           )}
@@ -71,56 +71,62 @@ export function RevenueChart({
     return null;
   };
 
+  if (isLoading) {
+    return (
+      <div className="h-72 flex items-center justify-center">
+        <span className="text-sm text-gray-400">Loading...</span>
+      </div>
+    );
+  }
+
+  if (!data || data.length === 0) {
+    return (
+      <div className="h-72 flex items-center justify-center">
+        <span className="text-sm text-gray-400">No revenue data available</span>
+      </div>
+    );
+  }
+
   return (
-    <ChartContainer
-      title={title}
-      description={description}
-      isLoading={isLoading}
-      error={error}
-      className="h-96"
-    >
-      <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-          <defs>
-            <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#1e3a5f" stopOpacity={0.3} />
-              <stop offset="95%" stopColor="#1e3a5f" stopOpacity={0} />
-            </linearGradient>
-          </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-          <XAxis
-            dataKey="date"
-            tick={{ fontSize: 12, fill: '#64748b' }}
-            tickLine={false}
-            axisLine={false}
-            tickFormatter={(value) => {
-              const date = new Date(value);
-              return date.toLocaleDateString('en-KE', { month: 'short', day: 'numeric' });
-            }}
-          />
-          <YAxis
-            tick={{ fontSize: 12, fill: '#64748b' }}
-            tickLine={false}
-            axisLine={false}
-            tickFormatter={(value) => `KES ${(value / 1000).toFixed(0)}k`}
-          />
-          <Tooltip content={<CustomTooltip />} />
-          <Area
-            type="monotone"
-            dataKey="revenue"
-            stroke="#1e3a5f"
-            strokeWidth={2}
-            fillOpacity={1}
-            fill="url(#revenueGradient)"
-          />
-        </AreaChart>
-      </ResponsiveContainer>
-    </ChartContainer>
+    <ResponsiveContainer width="100%" height={288}>
+      <AreaChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+        <defs>
+          <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%"  stopColor="#16a34a" stopOpacity={0.2} />
+            <stop offset="95%" stopColor="#16a34a" stopOpacity={0}   />
+          </linearGradient>
+        </defs>
+        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+        <XAxis
+          dataKey="date"
+          tick={{ fontSize: 12, fill: '#9ca3af' }}
+          tickLine={false}
+          axisLine={false}
+          tickFormatter={(value) =>
+            new Date(value).toLocaleDateString('en-KE', {
+              month: 'short',
+              day: 'numeric',
+            })
+          }
+        />
+        <YAxis
+          tick={{ fontSize: 12, fill: '#9ca3af' }}
+          tickLine={false}
+          axisLine={false}
+          tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`}
+        />
+        <Tooltip content={<CustomTooltip />} />
+        <Area
+          type="monotone"
+          dataKey="revenue"
+          stroke="#16a34a"
+          strokeWidth={2}
+          fillOpacity={1}
+          fill="url(#revenueGradient)"
+        />
+      </AreaChart>
+    </ResponsiveContainer>
   );
 }
-
-// -----------------------------------------------------------------------------
-// Export
-// -----------------------------------------------------------------------------
 
 export default RevenueChart;
