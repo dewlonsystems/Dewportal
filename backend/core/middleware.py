@@ -67,6 +67,10 @@ class M2MAuthenticationMiddleware(MiddlewareMixin):
             '/api/health/',
             '/admin/',
             '/static/',
+            
+            # 👇 Payment webhook callbacks (exempt from M2M auth)
+            '/api/v1/payments/callbacks/mpesa/',
+            '/api/v1/payments/webhooks/paystack/',
         ]
 
         if any(request.path.startswith(path) for path in excluded_paths):

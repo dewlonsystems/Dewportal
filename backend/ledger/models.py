@@ -248,9 +248,9 @@ class LedgerEntry(TimeStampedModel):
         """
         import secrets
         import string
-        from datetime import datetime
+        from django.utils import timezone
 
-        timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+        timestamp = timezone.now().strftime('%Y%m%d%H%M%S')
         random_part = ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(4))
         return f"LE{timestamp}{random_part}"
 

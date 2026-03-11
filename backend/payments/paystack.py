@@ -11,6 +11,9 @@ class PaystackService:
     """
     Paystack API Service.
     API Docs: https://paystack.com/docs/api/
+    
+    NOTE: Paystack signs webhooks using your secret key (sk_live_...), 
+    NOT a separate webhook secret.
     """
 
     BASE_URL       = 'https://api.paystack.co'
@@ -18,8 +21,8 @@ class PaystackService:
     VERIFY_URL     = f'{BASE_URL}/transaction/verify'
 
     def __init__(self):
-        self.secret_key     = settings.PAYSTACK_SECRET_KEY
-        self.webhook_secret = settings.PAYSTACK_WEBHOOK_SECRET  # ✅ not class-level
+        self.secret_key = settings.PAYSTACK_SECRET_KEY
+        # ✅ Removed: self.webhook_secret — Paystack uses secret_key for signatures
 
     def _get_headers(self):
         return {
@@ -109,13 +112,19 @@ class PaystackService:
     def verify_webhook_signature(self, payload: bytes, signature_header: str) -> bool:
         """
         Verify Paystack webhook HMAC-SHA512 signature.
+        
+        Paystack signs webhooks using your SECRET KEY (sk_live_... / sk_test_...),
+        NOT a separate webhook secret.
+        
+        Docs: https://paystack.com/docs/api/webhooks/#verifying-webhook-events
         """
-        if not signature_header or not self.webhook_secret:
-            logger.warning("Missing webhook secret or signature header")
+        if not signature_header:
+            logger.warning("Missing Paystack webhook signature header")
             return False
 
+        # ✅ Use secret_key (not webhook_secret) for signature verification
         computed = hmac.new(
-            self.webhook_secret.encode('utf-8'),
+            self.secret_key.encode('utf-8'),  # ← Changed from self.webhook_secret
             payload,
             hashlib.sha512,
         ).hexdigest()
