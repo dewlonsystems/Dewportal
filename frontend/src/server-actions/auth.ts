@@ -468,3 +468,19 @@ export async function getCurrentUserAction(): Promise<ApiResponse<LoginResponse[
     };
   }
 }
+
+// Add this to your existing auth server actions file
+
+/**
+ * Get access token for WebSocket connection.
+ * Only used to build the WS URL — token is read from httpOnly cookie server-side.
+ */
+export async function getAccessTokenForWSAction(): Promise<{ token: string | null }> {
+  try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get('access_token')?.value ?? null;
+    return { token };
+  } catch {
+    return { token: null };
+  }
+}

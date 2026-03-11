@@ -1,9 +1,6 @@
 // =============================================================================
 // DEWPORTAL FRONTEND - WEBSOCKET PROVIDER
 // =============================================================================
-// Provides WebSocket connection context to the entire application.
-// Manages connection lifecycle, authentication, heartbeat, and reconnection.
-// =============================================================================
 
 'use client';
 
@@ -19,72 +16,63 @@ import { useWebSocketStore } from '@/stores/useWebSocketStore';
 import { useNotificationStore } from '@/stores/useNotificationStore';
 import { WS_BASE_URL, WS_ENDPOINTS } from '@/lib/api/endpoints';
 import { WS_CONFIG } from '@/constants/config';
-import { debugLog, errorLog, warnLog } from '@/lib/utils';
+import { debugLog, errorLog } from '@/lib/utils';
 import { WebSocketMessage, Notification, Transaction } from '@/types';
-
-// -----------------------------------------------------------------------------
-// Types
-// -----------------------------------------------------------------------------
+import { getAccessTokenForWSAction } from '@/server-actions/auth';
 
 interface WebSocketProviderProps {
   children: ReactNode;
 }
 
-// -----------------------------------------------------------------------------
-// Helper: Get Access Token
-// -----------------------------------------------------------------------------
-
-async function getAccessToken(): Promise<string | null> {
-  const state = useAuthStore.getState();
-  return state.accessToken;
-}
-
-// -----------------------------------------------------------------------------
-// Provider Component
-// -----------------------------------------------------------------------------
-
 export function WebSocketProvider({ children }: WebSocketProviderProps): ReactElement {
-  const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const wsRef                  = useRef<WebSocket | null>(null);
+  const reconnectTimeoutRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const heartbeatIntervalRef   = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const { 
-    isConnected, 
-    setConnected, 
-    setConnecting, 
-    setConnectionError, 
-    setWebSocket, 
-    incrementReconnectAttempts, 
-    resetReconnectAttempts, 
-    updateLastHeartbeat, 
-    addNotification, 
-    addTransaction, 
+  const {
+    isConnected,
+    setConnected,
+    setConnecting,
+    setConnectionError,
+    setWebSocket,
+    incrementReconnectAttempts,
+    resetReconnectAttempts,
+    updateLastHeartbeat,
+    addNotification,
+    addTransaction,
     updateTransaction,
     reconnectAttempts,
   } = useWebSocketStore();
-  
+
   const { addNotification: addNotificationToStore } = useNotificationStore();
+
+  // ── Subscribe to only what we need ────────────────────────────────────────
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const user = useAuthStore((state) => state.user);
+  const isInitialized   = useAuthStore((state) => state.isInitialized);  // ✅ NEW
+  const user            = useAuthStore((state) => state.user);
 
   // ---------------------------------------------------------------------------
-  // Connect to WebSocket (defined first to avoid circular dependency)
+  // Connect
   // ---------------------------------------------------------------------------
 
   const connect = useCallback(async () => {
-    // Don't connect if not authenticated
+    // ✅ FIX 1: Wait until AuthProvider has finished verifying the session
+    if (!isInitialized) {
+      debugLog('WebSocket: Skipping connection (auth not initialized yet)');
+      return;
+    }
+
+    // ✅ FIX 2: Only connect if truly authenticated
     if (!isAuthenticated || !user) {
       debugLog('WebSocket: Skipping connection (not authenticated)');
       return;
     }
 
-    // Don't connect if already connected
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       debugLog('WebSocket: Already connected');
       return;
     }
 
-    // Don't connect if already connecting
     if (useWebSocketStore.getState().isConnecting) {
       debugLog('WebSocket: Already connecting');
       return;
@@ -94,50 +82,37 @@ export function WebSocketProvider({ children }: WebSocketProviderProps): ReactEl
       setConnecting(true);
       setConnectionError(null);
 
-      // Get access token for authentication
-      const token = await getAccessToken();
+      // ✅ FIX 3: Fetch token via server action — reads httpOnly cookie server-side
+      const { token } = await getAccessTokenForWSAction();
 
       if (!token) {
         throw new Error('No access token available');
       }
 
-      // Build WebSocket URL with token
       const wsUrl = `${WS_BASE_URL}${WS_ENDPOINTS.NOTIFICATIONS(token)}`;
+      debugLog('WebSocket: Connecting');
 
-      debugLog('WebSocket: Connecting', { url: wsUrl });
-
-      // Create WebSocket connection
       const ws = new WebSocket(wsUrl);
 
-      // Set up event handlers
       ws.onopen = () => {
         debugLog('WebSocket: Connection established');
         setConnected(true);
         setConnectionError(null);
         resetReconnectAttempts();
 
-        // Send initial heartbeat
         if (wsRef.current?.readyState === WebSocket.OPEN) {
           wsRef.current.send(JSON.stringify({ type: 'ping' }));
         }
 
-        // Call global connect handler if set
         useWebSocketStore.getState().onConnect?.();
       };
 
       ws.onmessage = (event: MessageEvent) => {
         try {
           const message: WebSocketMessage = JSON.parse(event.data);
-
-          debugLog('WebSocket: Message received', {
-            type: message.type,
-            hasData: !!message.data,
-          });
-
-          // Update last heartbeat
+          debugLog('WebSocket: Message received', { type: message.type });
           updateLastHeartbeat();
 
-          // Handle different message types
           switch (message.type) {
             case 'notification':
               if (message.data) {
@@ -147,31 +122,28 @@ export function WebSocketProvider({ children }: WebSocketProviderProps): ReactEl
               }
               break;
 
+            case 'payment_status_update':   // ✅ payments page listener
             case 'transaction_update':
               if (message.data) {
                 const transaction = message.data as Transaction;
-                if (transaction.id) {
-                  updateTransaction(transaction);
-                } else {
-                  addTransaction(transaction);
-                }
+                if (transaction.id) updateTransaction(transaction);
+                else addTransaction(transaction);
               }
               break;
 
             case 'pong':
-              debugLog('WebSocket: Heartbeat response received');
+              debugLog('WebSocket: Heartbeat pong received');
               break;
 
             case 'error':
-              errorLog('WebSocket: Error message received', message.message);
+              errorLog('WebSocket: Server error message', message.message);
               setConnectionError(message.message || 'Unknown WebSocket error');
               break;
 
             default:
-              debugLog('WebSocket: Message type', { type: message.type });
+              debugLog('WebSocket: Unhandled message type', { type: message.type });
           }
 
-          // Call global message handler if set
           useWebSocketStore.getState().onMessage?.(message);
 
         } catch (error) {
@@ -188,18 +160,15 @@ export function WebSocketProvider({ children }: WebSocketProviderProps): ReactEl
 
         setConnected(false);
         setWebSocket(null);
-
-        // Call global disconnect handler if set
         useWebSocketStore.getState().onDisconnect?.();
 
-        // Attempt reconnection if not a clean close or if code indicates error
+        // Reconnect unless it was a clean intentional close
         if (!event.wasClean || event.code !== 1000) {
-          // Schedule reconnect (inline to avoid circular dependency)
           const attempts = reconnectAttempts;
 
           if (attempts >= WS_CONFIG.MAX_RECONNECT_ATTEMPTS) {
             errorLog('WebSocket: Max reconnection attempts reached');
-            setConnectionError('Unable to connect to server. Please refresh the page.');
+            setConnectionError('Unable to connect. Please refresh the page.');
             return;
           }
 
@@ -208,25 +177,18 @@ export function WebSocketProvider({ children }: WebSocketProviderProps): ReactEl
             30000
           );
 
-          debugLog('WebSocket: Scheduling reconnection', {
-            attempt: attempts + 1,
-            delay,
-          });
-
+          debugLog('WebSocket: Scheduling reconnect', { attempt: attempts + 1, delay });
           incrementReconnectAttempts();
 
-          reconnectTimeoutRef.current = setTimeout(() => {
-            connect();
-          }, delay);
+          reconnectTimeoutRef.current = setTimeout(() => connect(), delay);
         }
       };
 
       ws.onerror = () => {
-        errorLog('WebSocket: Connection error');
-        setConnectionError('WebSocket connection error');
+        // onerror always fires before onclose — just log, let onclose handle reconnect
+        errorLog('WebSocket: Socket error event');
       };
 
-      // Store WebSocket instance
       wsRef.current = ws;
       setWebSocket(ws);
 
@@ -234,8 +196,7 @@ export function WebSocketProvider({ children }: WebSocketProviderProps): ReactEl
       errorLog('WebSocket: Connection failed', error);
       setConnectionError(error instanceof Error ? error.message : 'Connection failed');
       setConnecting(false);
-      
-      // Schedule reconnect on error
+
       const attempts = reconnectAttempts;
       if (attempts < WS_CONFIG.MAX_RECONNECT_ATTEMPTS) {
         const delay = Math.min(
@@ -243,13 +204,12 @@ export function WebSocketProvider({ children }: WebSocketProviderProps): ReactEl
           30000
         );
         incrementReconnectAttempts();
-        reconnectTimeoutRef.current = setTimeout(() => {
-          connect();
-        }, delay);
+        reconnectTimeoutRef.current = setTimeout(() => connect(), delay);
       }
     }
   }, [
     isAuthenticated,
+    isInitialized,       // ✅ added
     user,
     setConnecting,
     setConnectionError,
@@ -266,25 +226,22 @@ export function WebSocketProvider({ children }: WebSocketProviderProps): ReactEl
   ]);
 
   // ---------------------------------------------------------------------------
-  // Disconnect WebSocket
+  // Disconnect
   // ---------------------------------------------------------------------------
 
   const disconnect = useCallback(() => {
     debugLog('WebSocket: Disconnecting');
 
-    // Clear heartbeat interval
     if (heartbeatIntervalRef.current) {
       clearInterval(heartbeatIntervalRef.current);
       heartbeatIntervalRef.current = null;
     }
 
-    // Clear reconnect timeout
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;
     }
 
-    // Close WebSocket connection
     if (wsRef.current) {
       wsRef.current.close(1000, 'Client disconnect');
       wsRef.current = null;
@@ -295,43 +252,37 @@ export function WebSocketProvider({ children }: WebSocketProviderProps): ReactEl
   }, [setConnected, setWebSocket]);
 
   // ---------------------------------------------------------------------------
-  // Send Heartbeat
+  // Heartbeat
   // ---------------------------------------------------------------------------
 
   const sendHeartbeat = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      debugLog('WebSocket: Sending heartbeat');
       wsRef.current.send(JSON.stringify({ type: 'ping' }));
     }
   }, []);
 
   // ---------------------------------------------------------------------------
-  // Effect: Connect on Auth Change
+  // Effect: Connect when auth state is ready
+  // ✅ FIX: isInitialized added to dependency array — connect() now only
+  //         fires after AuthProvider.initializeSession() has completed
   // ---------------------------------------------------------------------------
 
   useEffect(() => {
-    if (isAuthenticated && user) {
+    if (isInitialized && isAuthenticated && user) {
       connect();
-    } else {
+    } else if (!isAuthenticated) {
       disconnect();
     }
 
-    // Cleanup on unmount
-    return () => {
-      disconnect();
-    };
-  }, [isAuthenticated, user, connect, disconnect]);
+    return () => { disconnect(); };
+  }, [isInitialized, isAuthenticated, user, connect, disconnect]);
 
   // ---------------------------------------------------------------------------
-  // Effect: Heartbeat Interval
+  // Effect: Heartbeat
   // ---------------------------------------------------------------------------
 
   useEffect(() => {
     if (isConnected) {
-      debugLog('WebSocket: Starting heartbeat interval', {
-        interval: WS_CONFIG.HEARTBEAT_INTERVAL,
-      });
-
       heartbeatIntervalRef.current = setInterval(
         sendHeartbeat,
         WS_CONFIG.HEARTBEAT_INTERVAL
@@ -346,17 +297,7 @@ export function WebSocketProvider({ children }: WebSocketProviderProps): ReactEl
     };
   }, [isConnected, sendHeartbeat]);
 
-  // ---------------------------------------------------------------------------
-  // Render
-  // ---------------------------------------------------------------------------
-
-  debugLog('WebSocketProvider: Rendered', { isConnected });
-
   return <>{children}</>;
 }
-
-// -----------------------------------------------------------------------------
-// Export
-// -----------------------------------------------------------------------------
 
 export default WebSocketProvider;
