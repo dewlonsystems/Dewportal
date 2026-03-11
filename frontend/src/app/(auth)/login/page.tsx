@@ -29,7 +29,7 @@ export default function LoginPage() {
     // Only bounce already-authenticated users away on page load.
     // LoginForm handles the redirect after a fresh login itself.
     if (isAuthenticated && !mustChangePassword) {
-      router.replace('/dashboard/dashboard');
+      router.replace('/dashboard');
     } else if (isAuthenticated && mustChangePassword) {
       router.replace('/force-password-change');
     }

@@ -174,8 +174,8 @@ export async function verifyPaystackPaymentAction(
 
     // Revalidate transactions if payment completed
     if (data.status === 'completed') {
-      revalidatePath('/dashboard/transactions');
-      revalidatePath('/dashboard/payments');
+      revalidatePath('/transactions');
+      revalidatePath('/payments');
     }
 
     return {

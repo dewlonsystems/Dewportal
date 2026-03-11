@@ -155,7 +155,7 @@ export async function createUserAction(
 
     debugLog('User created', { userId: response.data.id });
 
-    revalidatePath('/dashboard/users');
+    revalidatePath('/users');
 
     return {
       success: true,
@@ -199,8 +199,8 @@ export async function updateUserAction(
 
     debugLog('User updated', { userId });
 
-    revalidatePath('/dashboard/users');
-    revalidatePath('/dashboard/profile');
+    revalidatePath('/users');
+    revalidatePath('/profile');
 
     return {
       success: true,
