@@ -174,8 +174,8 @@ class RequestLoggingMiddleware(MiddlewareMixin):
 
         duration = 0
         if hasattr(request, '_start_time') and request._start_time:
-            from datetime import datetime
-            duration = (datetime.now() - request._start_time).total_seconds()
+            from django.utils import timezone
+            duration = (timezone.now() - request._start_time).total_seconds()
 
         user_id = request.user.id if hasattr(request, 'user') and request.user.is_authenticated else None
         user_email = request.user.email if hasattr(request, 'user') and request.user.is_authenticated else 'anonymous'

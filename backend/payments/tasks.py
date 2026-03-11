@@ -36,10 +36,14 @@ def verify_pending_mpesa_transactions():
             result = mpesa.query_stk_status(transaction.mpesa_checkout_request_id)
             
             # Process query result
-            if result.get('ResultCode') == '0':
+            result_code = str(result.get('ResultCode', result.get('resultCode', '')))
+            current_status = transaction.status
+            if result_code == '0' and transaction.can_transition_to('completed'):
                 transaction.update_status('completed', callback_payload=result)
-            else:
+            elif result_code != '0' and result_code != '' and transaction.can_transition_to('failed'):
                 transaction.update_status('failed', callback_payload=result)
+            else:
+                logger.info(f'Skipping transition for {transaction.reference}: already {current_status}')
             
             verified_count += 1
             logger.info(f"Verified Mpesa transaction: {transaction.reference}")
