@@ -3,7 +3,7 @@ from rest_framework import generics, status, serializers
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView as SimpleTokenRefreshView  # ← Aliased import
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 
@@ -42,7 +42,7 @@ class LoginView(TokenObtainPairView):
             )
 
 
-class TokenRefreshView(TokenRefreshView):
+class CustomTokenRefreshView(SimpleTokenRefreshView):  # ← Renamed class + uses aliased parent
     """
     Token refresh endpoint with user status validation.
     """

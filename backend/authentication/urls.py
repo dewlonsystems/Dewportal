@@ -1,7 +1,11 @@
 from django.urls import path
 from .views import (
-    LoginView, TokenRefreshView, LogoutView,
-    ForcePasswordChangeView, VerifySessionView, AccountStatusView
+    LoginView, 
+    CustomTokenRefreshView,  # ← Updated: was TokenRefreshView
+    LogoutView,
+    ForcePasswordChangeView, 
+    VerifySessionView, 
+    AccountStatusView
 )
 
 app_name = 'authentication'
@@ -12,7 +16,7 @@ urlpatterns = [
     path('logout/', LogoutView.as_view(), name='logout'),
 
     # Token management
-    path('token/refresh/', TokenRefreshView.as_view(), name='token-refresh'),
+    path('token/refresh/', CustomTokenRefreshView.as_view(), name='token-refresh'),  # ← Updated: was TokenRefreshView
 
     # Password management
     path('password/force-change/', ForcePasswordChangeView.as_view(), name='force-password-change'),
