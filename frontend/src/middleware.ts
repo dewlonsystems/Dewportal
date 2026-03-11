@@ -189,6 +189,14 @@ function isAdminRoute(pathname: string): boolean {
 }
 
 // -----------------------------------------------------------------------------
+// Helper: Check if Route is Payment Callback
+// -----------------------------------------------------------------------------
+
+function isPaymentCallbackRoute(pathname: string): boolean {
+  return pathname.startsWith(DASHBOARD_ROUTES.VERIFY);
+}
+
+// -----------------------------------------------------------------------------
 // Main Middleware Function
 // -----------------------------------------------------------------------------
 
@@ -242,6 +250,14 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
       }
       return NextResponse.next();
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Payment Verify Callback (public — Paystack redirects here after payment)
+  // ---------------------------------------------------------------------------
+
+  if (isPaymentCallbackRoute(pathname)) {
+    return NextResponse.next();
   }
 
   // ---------------------------------------------------------------------------
