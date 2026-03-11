@@ -3,7 +3,7 @@ Celery tasks for core app.
 """
 
 import logging
-from django.db import models
+from django.db.models import Sum
 from celery import shared_task
 from django.utils import timezone
 from datetime import timedelta
@@ -37,7 +37,7 @@ def send_daily_admin_summary():
         total_revenue = Transaction.objects.filter(
             status='completed',
             created_at__gte=yesterday
-        ).aggregate(total=models.Sum('amount'))['total'] or 0
+        ).aggregate(total=Sum('amount'))['total'] or 0
         
         transaction_count = Transaction.objects.filter(
             created_at__gte=yesterday
