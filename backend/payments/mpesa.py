@@ -91,6 +91,7 @@ class MpesaService:
         self.shortcode       = settings.MPESA_SHORTCODE
         self.passkey         = settings.MPESA_PASSKEY
         self.callback_url    = settings.MPESA_CALLBACK_URL
+        self.tillnumber      = settings.MPESA_TILL_NUMBER
 
     # ── OAuth Token ────────────────────────────────────────────────────────────
 
@@ -217,7 +218,7 @@ class MpesaService:
             'TransactionType':   'CustomerPayBillOnline',
             'Amount':            mpesa_amount,          # ✅ always clean integer
             'PartyA':            normalized_phone,      # ✅ always 254XXXXXXXXX
-            'PartyB':            self.shortcode,
+            'PartyB':            self.tillnumber,
             'PhoneNumber':       normalized_phone,      # ✅ same normalized number
             'CallBackURL':       self.callback_url,
             'AccountReference':  account_reference[:12],  # Safaricom max 12 chars
