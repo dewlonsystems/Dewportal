@@ -105,7 +105,7 @@ class DashboardView(APIView):
         activity_data = [
             {
                 'id': log.id,
-                'action': log.action,
+                'action': log.action_type,
                 'user': log.user.email if log.user else 'system',
                 'timestamp': log.created_at.isoformat(),
                 'details': log.details
