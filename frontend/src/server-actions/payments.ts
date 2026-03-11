@@ -116,64 +116,32 @@ export async function verifyPaystackPaymentAction(
       return {
         success: false,
         error: 'Missing payment reference',
-        data: undefined, // ✅ Fixed: use undefined instead of null
+        data: undefined,
       };
     }
 
     debugLog('Verify Paystack payment', { reference });
 
-    // ✅ Build URL directly to match backend exactly
-    // Backend: GET /api/v1/payments/paystack/verify/?reference=DPABC123
-    const API_BASE = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '') || 'http://localhost:8000';
-    const url = `${API_BASE}/api/v1/payments/paystack/verify/?reference=${encodeURIComponent(reference)}`;
+    // ✅ Use apiGet instead of raw fetch — this automatically attaches the
+    //    X-System-API-Key and X-M2M-Authorization headers that Django's
+    //    M2MAuthenticationMiddleware requires on all /api/v1/ endpoints.
+    //    Previously, the raw fetch was sending neither header, causing Django
+    //    to reject the request with "Missing system API key".
+    const url = `${PAYMENT_ENDPOINTS.PAYSTACK_VERIFY}?reference=${encodeURIComponent(reference)}`;
 
-    debugLog('Fetching verification URL', { url });
-
-    // ✅ NO auth headers — endpoint allows unauthenticated access
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      cache: 'no-store',
-      signal: AbortSignal.timeout(10000), // 10 second timeout
+    const response = await apiGet<PaystackVerifyResponse>(url, {
+      // No Authorization header — this endpoint is AllowAny for user JWT,
+      // but still requires M2M headers (handled automatically by apiClient).
     });
-
-    // Handle 404 explicitly
-    if (response.status === 404) {
-      errorLog('Verification endpoint not found', { url, status: response.status });
-      return {
-        success: false,
-        error: 'Verification service unavailable. Please try again later.',
-        data: undefined, // ✅ Fixed
-      };
-    }
-
-    // Handle other HTTP errors
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      errorLog('Verification API error', { 
-        status: response.status, 
-        url, 
-        error: errorData 
-      });
-      return {
-        success: false,
-        error: errorData.error || `Verification failed with status ${response.status}`,
-        data: undefined, // ✅ Fixed
-      };
-    }
-
-    const data = await response.json();
 
     debugLog('Paystack verification result', {
       reference,
-      status: data.status,
-      success: data.success,
+      status: response.data.status,
+      success: response.data.success,
     });
 
     // Revalidate transactions if payment completed
-    if (data.status === 'completed') {
+    if (response.data.status === 'completed') {
       revalidatePath('/transactions');
       revalidatePath('/payments');
     }
@@ -181,20 +149,21 @@ export async function verifyPaystackPaymentAction(
     return {
       success: true,
       data: {
-        status: data.status,
-        message: data.message,
-        transaction: data.transaction,
-        success: data.success,
+        status: response.data.status,
+        message: response.data.message,
+        transaction: response.data.transaction,
+        success: response.data.success,
       },
       status: 200,
     };
 
   } catch (error) {
     errorLog('Paystack verification failed', error);
+    const apiError = error as ApiError;
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Network error while verifying payment',
-      data: undefined, // ✅ Fixed
+      error: apiError.message || 'Network error while verifying payment',
+      data: undefined,
     };
   }
 }
