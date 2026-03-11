@@ -2,7 +2,7 @@
 // DEWPORTAL FRONTEND - M2M AUTHENTICATION
 // =============================================================================
 
-import jwt from 'jsonwebtoken';
+import { SignJWT, importPKCS8 } from 'jose';
 import { errorLog, debugLog } from '@/lib/utils';
 
 // -----------------------------------------------------------------------------
@@ -15,11 +15,12 @@ export interface M2MTokenPayload {
   exp: number;
   jti: string;
   aud: string;
+  [key: string]: unknown;
 }
 
 export interface M2MTokenResult {
   token: string;
-  expiresAt: number;
+  expiresAt: number;  
 }
 
 // -----------------------------------------------------------------------------
@@ -34,22 +35,24 @@ const M2M_CONFIG = {
 } as const;
 
 // -----------------------------------------------------------------------------
-// ✅ FIXED: Global cache that persists across Next.js module reloads
+// ✅ Global cache that persists across Next.js module reloads
 // -----------------------------------------------------------------------------
 
 const globalForM2M = global as typeof globalThis & {
   m2mPrivateKey: string | null;
+  m2mCryptoKey: CryptoKey | null; // ⚡ NEW: Cache the parsed CryptoKey
   m2mTokenCache: M2MTokenResult | null;
 };
 
 if (!globalForM2M.m2mPrivateKey) globalForM2M.m2mPrivateKey = null;
+if (!globalForM2M.m2mCryptoKey) globalForM2M.m2mCryptoKey = null;
 if (!globalForM2M.m2mTokenCache) globalForM2M.m2mTokenCache = null;
 
 // -----------------------------------------------------------------------------
-// Load Private Key
+// Load & Parse Private Key
 // -----------------------------------------------------------------------------
 
-export function loadPrivateKey(): string {
+export async function loadPrivateKey(): Promise<string> {
   if (globalForM2M.m2mPrivateKey) {
     return globalForM2M.m2mPrivateKey;
   }
@@ -80,18 +83,32 @@ export function loadPrivateKey(): string {
   }
 }
 
+// ⚡ NEW: Parse PEM key to CryptoKey (cached for performance)
+export async function getCryptoKey(): Promise<CryptoKey> {
+  if (globalForM2M.m2mCryptoKey) {
+    return globalForM2M.m2mCryptoKey;
+  }
+
+  const pem = await loadPrivateKey();
+  
+  // Parse PEM to CryptoKey using jose
+  const cryptoKey = await importPKCS8(pem, M2M_CONFIG.ALGORITHM);
+  
+  globalForM2M.m2mCryptoKey = cryptoKey;
+  return cryptoKey;
+}
+
 // -----------------------------------------------------------------------------
 // Generate Token
 // -----------------------------------------------------------------------------
 
 export async function generateM2MToken(): Promise<string> {
   try {
+    // Check cache with 60-second buffer
     if (globalForM2M.m2mTokenCache && globalForM2M.m2mTokenCache.expiresAt > Date.now() + 60000) {
       debugLog('Using cached M2M token');
       return globalForM2M.m2mTokenCache.token;
     }
-
-    const privateKey = loadPrivateKey();
 
     const systemApiKey = process.env.SYSTEM_API_KEY;
     if (!systemApiKey) {
@@ -110,12 +127,19 @@ export async function generateM2MToken(): Promise<string> {
       aud: M2M_CONFIG.AUDIENCE,
     };
 
-    const token = jwt.sign(
-      payload,
-      privateKey,
-      { algorithm: M2M_CONFIG.ALGORITHM } as jwt.SignOptions
-    );
+    // ⚡ Get cached CryptoKey and sign with jose
+    const cryptoKey = await getCryptoKey();
+    
+    const token = await new SignJWT(payload)
+      .setProtectedHeader({ alg: M2M_CONFIG.ALGORITHM }) // Required: explicit algorithm
+      .setIssuedAt(now)
+      .setExpirationTime(exp)
+      .setJti(jti)
+      .setIssuer(M2M_CONFIG.ISSUER)
+      .setAudience(M2M_CONFIG.AUDIENCE)
+      .sign(cryptoKey);
 
+    // Update cache
     globalForM2M.m2mTokenCache = {
       token,
       expiresAt: exp * 1000,
@@ -178,6 +202,7 @@ export function clearTokenCache(): void {
 
 export function clearPrivateKeyCache(): void {
   globalForM2M.m2mPrivateKey = null;
+  globalForM2M.m2mCryptoKey = null; // ⚡ Clear CryptoKey cache too
   debugLog('Key cache cleared');
 }
 
@@ -205,7 +230,8 @@ export async function validateM2MConfig(): Promise<{
   }
 
   try {
-    loadPrivateKey();
+    await loadPrivateKey();
+    await getCryptoKey(); // ⚡ Test CryptoKey parsing
   } catch (error) {
     errors.push(`Key configuration error: ${(error as Error).message}`);
   }
@@ -230,6 +256,7 @@ export async function validateM2MConfig(): Promise<{
 
 export const m2mAuth = {
   loadPrivateKey,
+  getCryptoKey, // ⚡ Export new helper if needed elsewhere
   generateM2MToken,
   getM2MHeaders,
   clearTokenCache,
