@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Transactions Export – Dewlon Systems</title>
+  <style>
+    @page {
+      size: A4 landscape;
+      margin: 0;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      background: #ffffff;
+      color: #1a1a2e;
+      font-size: 8.5pt;
+    }
+
+    .page {
+      width: 297mm;
+      min-height: 210mm;
+      position: relative;
+    }
+
+    /* Header */
+    .header {
+      background: #1a3d2b;
+      padding: 24px 36px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .brand {
+      font-size: 16pt;
+      font-weight: 800;
+      color: #ffffff;
+      letter-spacing: -0.5px;
+    }
+
+    .brand span { color: #c45c1a; }
+
+    .export-meta {
+      text-align: right;
+    }
+
+    .export-meta h2 {
+      font-size: 13pt;
+      font-weight: 700;
+      color: #ffffff;
+      margin-bottom: 2px;
+    }
+
+    .export-meta p {
+      font-size: 7.5pt;
+      color: rgba(255,255,255,0.55);
+    }
+
+    .status-bar {
+      height: 3px;
+      background: linear-gradient(90deg, #1a3d2b 0%, #c45c1a 100%);
+    }
+
+    /* Summary strip */
+    .summary {
+      display: flex;
+      background: #f8faf9;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .summary-item {
+      flex: 1;
+      padding: 14px 20px;
+      border-right: 1px solid #e5e7eb;
+    }
+
+    .summary-item:last-child { border-right: none; }
+
+    .summary-item .s-label {
+      font-size: 7pt;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: #9ca3af;
+      margin-bottom: 4px;
+    }
+
+    .summary-item .s-value {
+      font-size: 13pt;
+      font-weight: 800;
+      color: #1a3d2b;
+    }
+
+    .summary-item .s-value.orange { color: #c45c1a; }
+
+    /* Filter info */
+    .filter-info {
+      padding: 10px 36px;
+      background: #fff;
+      border-bottom: 1px solid #e5e7eb;
+      font-size: 7.5pt;
+      color: #6b7280;
+    }
+
+    .filter-info strong { color: #1a3d2b; }
+
+    /* Table */
+    .table-wrap {
+      padding: 0 36px 80px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 0;
+    }
+
+    thead tr {
+      background: #1a3d2b;
+    }
+
+    thead th {
+      padding: 10px 10px;
+      font-size: 7pt;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.85);
+      text-align: left;
+      white-space: nowrap;
+    }
+
+    tbody tr:nth-child(even) {
+      background: #f8faf9;
+    }
+
+    tbody tr:nth-child(odd) {
+      background: #ffffff;
+    }
+
+    tbody td {
+      padding: 9px 10px;
+      border-bottom: 1px solid #f0f0f0;
+      font-size: 8pt;
+      color: #374151;
+      vertical-align: middle;
+    }
+
+    td.mono {
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 7.5pt;
+      color: #1a3d2b;
+    }
+
+    td.amount {
+      font-weight: 700;
+      color: #1a3d2b;
+      text-align: right;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 100px;
+      font-size: 7pt;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+
+    .badge-completed { background: #dcfce7; color: #15803d; }
+    .badge-failed    { background: #fee2e2; color: #dc2626; }
+    .badge-pending   { background: #fef3c7; color: #d97706; }
+    .badge-cancelled { background: #f3f4f6; color: #6b7280; }
+    .badge-mpesa     { background: #dcfce7; color: #15803d; }
+    .badge-paystack  { background: #dbeafe; color: #1d4ed8; }
+
+    /* Footer */
+    .footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: #1a3d2b;
+      padding: 10px 36px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .footer p {
+      font-size: 7pt;
+      color: rgba(255,255,255,0.5);
+    }
+
+    .empty-state {
+      padding: 48px 0;
+      text-align: center;
+      color: #9ca3af;
+      font-size: 10pt;
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="brand">Dewlon<span>.</span> <span style="font-size:10pt;font-weight:400;color:rgba(255,255,255,0.6)">Systems</span></div>
+    <div class="export-meta">
+      <h2>Transactions Export</h2>
+      <p>Generated {{ generated_at|date:"F j, Y" }} at {{ generated_at|time:"H:i" }} UTC
+        {% if exported_by %} · {{ exported_by }}{% endif %}
+      </p>
+    </div>
+  </div>
+  <div class="status-bar"></div>
+
+  <!-- Summary strip -->
+  <div class="summary">
+    <div class="summary-item">
+      <div class="s-label">Total Records</div>
+      <div class="s-value">{{ total_count }}</div>
+    </div>
+    <div class="summary-item">
+      <div class="s-label">Total Amount</div>
+      <div class="s-value orange">KES {{ total_amount|floatformat:2 }}</div>
+    </div>
+    <div class="summary-item">
+      <div class="s-label">Completed</div>
+      <div class="s-value">{{ completed_count }}</div>
+    </div>
+    <div class="summary-item">
+      <div class="s-label">Failed</div>
+      <div class="s-value">{{ failed_count }}</div>
+    </div>
+    <div class="summary-item">
+      <div class="s-label">Pending</div>
+      <div class="s-value">{{ pending_count }}</div>
+    </div>
+    {% if date_from or date_to %}
+    <div class="summary-item">
+      <div class="s-label">Date Range</div>
+      <div class="s-value" style="font-size:9pt;">
+        {{ date_from|default:"All" }} – {{ date_to|default:"Now" }}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Filter info -->
+  {% if status_filter or method_filter %}
+  <div class="filter-info">
+    Filters applied:
+    {% if status_filter %}<strong>Status: {{ status_filter|title }}</strong>{% endif %}
+    {% if method_filter %}<strong>Method: {{ method_filter|title }}</strong>{% endif %}
+  </div>
+  {% endif %}
+
+  <!-- Table -->
+  <div class="table-wrap">
+    {% if transactions %}
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Reference</th>
+          <th>Date</th>
+          <th>User</th>
+          <th>Method</th>
+          <th>Provider Ref</th>
+          <th>Status</th>
+          <th style="text-align:right">Amount (KES)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for tx in transactions %}
+        <tr>
+          <td style="color:#9ca3af;font-size:7.5pt;">{{ forloop.counter }}</td>
+          <td class="mono">{{ tx.reference }}</td>
+          <td>{{ tx.created_at|date:"d M Y H:i" }}</td>
+          <td>{{ tx.user.get_full_name|default:tx.user.username }}</td>
+          <td>
+            <span class="badge badge-{{ tx.payment_method }}">
+              {% if tx.payment_method == 'mpesa' %}M-Pesa{% else %}Paystack{% endif %}
+            </span>
+          </td>
+          <td class="mono">{{ tx.provider_reference|default:"—" }}</td>
+          <td><span class="badge badge-{{ tx.status }}">{{ tx.status|title }}</span></td>
+          <td class="amount">{{ tx.amount|floatformat:2 }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">No transactions found for the selected filters.</div>
+    {% endif %}
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <p>Dewlon Systems Limited · support@dewlon.com · dewlons.com</p>
+    <p>CONFIDENTIAL — This export is intended for authorised personnel only</p>
+  </div>
+
+</div>
+</body>
+</html>

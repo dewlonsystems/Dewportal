@@ -8,6 +8,8 @@ from .views import (
     PaystackWebhookView,
     PaystackVerifyView,
     TransactionSummaryView,
+    TransactionReceiptView,
+    TransactionExportView,
 )
 
 app_name = 'payments'
@@ -19,6 +21,12 @@ urlpatterns = [
     # Transaction management
     path('', include(router.urls)),
     path('transactions/<int:pk>/', TransactionDetailView.as_view(), name='transaction-detail'),
+
+    # Receipt PDF
+    path('transactions/<int:pk>/receipt/', TransactionReceiptView.as_view(), name='transaction-receipt'),
+
+    # Export (PDF or Excel)
+    path('export/', TransactionExportView.as_view(), name='transaction-export'),
 
     # Payment initiation
     path('initiate/', InitiatePaymentView.as_view(), name='initiate-payment'),

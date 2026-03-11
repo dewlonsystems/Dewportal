@@ -1,7 +1,12 @@
 # =============================================================================
 # DEWPORTAL BACKEND - PAYMENTS VIEWS
 # =============================================================================
+import io
 import logging
+from decimal import Decimal
+
+from django.http import HttpResponse
+from django.template.loader import render_to_string
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
@@ -12,6 +17,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import OrderingFilter, SearchFilter
+from rest_framework.renderers import JSONRenderer 
 
 from core.permissions import IsStaffOrAdmin, IsOwnerOrAdmin
 from .models import Transaction
@@ -65,7 +71,7 @@ def _notify_payment_update(transaction: Transaction, result_desc: str = None):
     # ── User channel ──────────────────────────────────────────────────────────
     _push_to_websocket(
         f'user_{transaction.user.id}',
-        'payment_status_update',   # matches frontend WebSocket listener
+        'payment_status_update',
         payload,
     )
 
@@ -312,13 +318,13 @@ class PaystackVerifyView(APIView):
     """
     GET /api/v1/payments/paystack/verify/?reference=DP...
     Called by the frontend verify page after Paystack redirects the user back.
-    
-    🔐 SECURITY: 
+
+    🔐 SECURITY:
     - Allows unauthenticated access (user may not be logged in after Paystack redirect)
     - Validates ownership ONLY if user is authenticated
     - Returns minimal data for unauthenticated requests
     """
-    permission_classes = [AllowAny]  # ✅ Changed from IsAuthenticated
+    permission_classes = [AllowAny]
 
     def get(self, request):
         reference = request.query_params.get('reference')
@@ -343,24 +349,22 @@ class PaystackVerifyView(APIView):
                 return Response({'error': 'Permission denied'},
                                 status=status.HTTP_403_FORBIDDEN)
 
-        # ── Already resolved — return immediately ─────────────────────────────
+        # ── Already resolved — return immediately ──────────────────────────────
         if transaction.status in ('completed', 'failed', 'cancelled'):
-            # Return full data if authenticated, minimal if not
             if request.user.is_authenticated:
                 transaction_data = TransactionSerializer(transaction).data
             else:
-                # 🔒 Minimal data for unauthenticated requests (security)
                 transaction_data = {
-                    'reference': transaction.reference,
-                    'status': transaction.status,
-                    'amount': str(transaction.amount),
+                    'reference':      transaction.reference,
+                    'status':         transaction.status,
+                    'amount':         str(transaction.amount),
                     'payment_method': transaction.payment_method,
-                    'created_at': transaction.created_at.isoformat(),
+                    'created_at':     transaction.created_at.isoformat(),
                 }
-            
+
             return Response({
-                'success': transaction.status == 'completed',
-                'status':  transaction.status,
+                'success':     transaction.status == 'completed',
+                'status':      transaction.status,
                 'transaction': transaction_data,
             })
 
@@ -375,17 +379,17 @@ class PaystackVerifyView(APIView):
         if not result.get('success'):
             return Response({
                 'success': False,
-                'status': 'pending',
+                'status':  'pending',
                 'message': result.get('error', 'Verification failed — transaction may still be processing'),
                 'transaction': {
                     'reference': transaction.reference,
-                    'status': transaction.status,
+                    'status':    transaction.status,
                 } if not request.user.is_authenticated else TransactionSerializer(transaction).data,
             })
 
-        paystack_status = result.get('status')   # 'success', 'failed', 'abandoned'
+        paystack_status = result.get('status')
 
-        # ── Map Paystack status → our status ──────────────────────────────────
+        # ── Map Paystack status → our status ───────────────────────────────────
         if paystack_status == 'success':
             if transaction.can_transition_to('completed'):
                 try:
@@ -395,8 +399,7 @@ class PaystackVerifyView(APIView):
                         provider_reference=reference,
                     )
                     _notify_payment_update(transaction)
-                    
-                    # Only log audit if user is authenticated
+
                     if request.user.is_authenticated:
                         _create_audit_log(
                             user=request.user,
@@ -410,12 +413,14 @@ class PaystackVerifyView(APIView):
 
             return Response({
                 'success': True,
-                'status': 'completed',
-                'transaction': TransactionSerializer(transaction).data if request.user.is_authenticated else {
-                    'reference': transaction.reference,
-                    'status': 'completed',
-                    'amount': str(transaction.amount),
-                },
+                'status':  'completed',
+                'transaction': TransactionSerializer(transaction).data
+                    if request.user.is_authenticated
+                    else {
+                        'reference': transaction.reference,
+                        'status':    'completed',
+                        'amount':    str(transaction.amount),
+                    },
             })
 
         elif paystack_status in ('failed', 'abandoned'):
@@ -428,22 +433,20 @@ class PaystackVerifyView(APIView):
 
             return Response({
                 'success': False,
-                'status': 'failed',
+                'status':  'failed',
                 'message': f'Payment {paystack_status} on Paystack',
-                'transaction': TransactionSerializer(transaction).data if request.user.is_authenticated else {
-                    'reference': transaction.reference,
-                    'status': 'failed',
-                },
+                'transaction': TransactionSerializer(transaction).data
+                    if request.user.is_authenticated
+                    else {'reference': transaction.reference, 'status': 'failed'},
             })
 
-        # pending / processing
         return Response({
             'success': False,
-            'status': 'pending',
+            'status':  'pending',
             'message': 'Payment is still being processed',
             'transaction': {
                 'reference': transaction.reference,
-                'status': 'pending',
+                'status':    'pending',
             } if not request.user.is_authenticated else TransactionSerializer(transaction).data,
         })
 
@@ -467,7 +470,7 @@ class MpesaCallbackView(APIView):
             return Response({'status': 'rejected'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            callback   = MpesaService().parse_callback(request.data)
+            callback    = MpesaService().parse_callback(request.data)
             checkout_id = callback.get('checkout_request_id')
             is_success  = callback.get('success')
             result_desc = callback.get('result_description', '')
@@ -479,7 +482,7 @@ class MpesaCallbackView(APIView):
                 )
             except Transaction.DoesNotExist:
                 logger.warning(f"No transaction for CheckoutRequestID: {checkout_id}")
-                return Response({'status': 'accepted'})   # still 200
+                return Response({'status': 'accepted'})
 
             new_status = 'completed' if is_success else 'failed'
 
@@ -488,7 +491,7 @@ class MpesaCallbackView(APIView):
                             f"(already {transaction.status})")
                 return Response({'status': 'accepted'})
 
-            # ── Update transaction ────────────────────────────────────────────
+            # ── Update transaction ─────────────────────────────────────────────
             transaction.update_status(
                 new_status,
                 callback_payload=request.data,
@@ -502,13 +505,11 @@ class MpesaCallbackView(APIView):
                 transaction.mpesa_response_description = result_desc
                 transaction.save(update_fields=['mpesa_response_description'])
 
-            # ── Push to frontend via WebSocket ────────────────────────────────
             _notify_payment_update(
                 transaction,
                 result_desc=result_desc if not is_success else None,
             )
 
-            # ── Audit ─────────────────────────────────────────────────────────
             _create_audit_log(
                 user=transaction.user,
                 action_type='transaction_completed' if is_success else 'transaction_failed',
@@ -527,7 +528,6 @@ class MpesaCallbackView(APIView):
 
         except Exception as e:
             logger.error(f"Mpesa callback error: {str(e)}", exc_info=True)
-            # Always return 200 — never let Safaricom retry due to our error
 
         return Response({'status': 'accepted'})
 
@@ -568,7 +568,7 @@ class PaystackWebhookView(APIView):
                 logger.warning(f"No transaction for Paystack reference: {reference}")
                 return Response({'status': 'accepted'})
 
-            # ── Amount guard ──────────────────────────────────────────────────
+            # ── Amount guard ───────────────────────────────────────────────────
             webhook_amount = data.get('amount', 0)
             if abs(float(webhook_amount) - float(transaction.amount)) > 0.01:
                 logger.warning(
@@ -582,17 +582,14 @@ class PaystackWebhookView(APIView):
                             f"(already {transaction.status})")
                 return Response({'status': 'accepted'})
 
-            # ── Update transaction ────────────────────────────────────────────
             transaction.update_status(
                 'completed',
                 callback_payload=request.data,
                 provider_reference=reference,
             )
 
-            # ── Push to frontend via WebSocket ────────────────────────────────
             _notify_payment_update(transaction)
 
-            # ── Audit ─────────────────────────────────────────────────────────
             _create_audit_log(
                 user=transaction.user,
                 action_type='transaction_completed',
@@ -638,3 +635,405 @@ class TransactionSummaryView(APIView):
             'failed_transactions':    qs.filter(status='failed').count(),
             'total_transactions':     qs.exclude(status='cancelled').count(),
         })
+
+
+# =============================================================================
+# Transaction Receipt PDF
+# =============================================================================
+
+class TransactionReceiptView(APIView):
+    """
+    GET /api/v1/payments/transactions/<id>/receipt/
+    Generate and return a PDF receipt for a completed or failed transaction.
+
+    Staff can only download their own receipts.
+    Admin can download any receipt.
+    """
+    permission_classes = [IsAuthenticated, IsStaffOrAdmin]
+
+    def get(self, request, pk):
+        # ── Fetch transaction ──────────────────────────────────────────────────
+        try:
+            transaction = Transaction.objects.select_related('user').get(
+                pk=pk,
+                is_deleted=False,
+            )
+        except Transaction.DoesNotExist:
+            return Response(
+                {'error': 'Transaction not found'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # ── Ownership check ────────────────────────────────────────────────────
+        if request.user.role != 'admin' and transaction.user != request.user:
+            return Response(
+                {'error': 'Permission denied'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # ── Only allow receipts for resolved transactions ──────────────────────
+        if transaction.status == 'pending':
+            return Response(
+                {'error': 'Receipt is not available for pending transactions.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # ── Render HTML template ───────────────────────────────────────────────
+        try:
+            html_content = render_to_string(
+                'payments/receipt.html',
+                {
+                    'transaction':  transaction,
+                    'generated_at': timezone.now(),
+                    'generated_by': request.user.get_full_name() or request.user.username,
+                },
+            )
+        except Exception as e:
+            logger.error(f'Receipt template render failed [{pk}]: {e}')
+            return Response(
+                {'error': 'Failed to generate receipt. Please try again.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        # ── Convert to PDF via WeasyPrint ──────────────────────────────────────
+        try:
+            from weasyprint import HTML
+            from weasyprint.text.fonts import FontConfiguration
+
+            font_config = FontConfiguration()
+            pdf_bytes = HTML(string=html_content, base_url=None).write_pdf(
+                font_config=font_config,
+            )
+        except Exception as e:
+            logger.error(f'WeasyPrint PDF generation failed [{pk}]: {e}')
+            return Response(
+                {'error': 'PDF generation failed. Please try again.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        # ── Audit log ──────────────────────────────────────────────────────────
+        _create_audit_log(
+            user=request.user,
+            action_type='receipt_downloaded',
+            description=f"Receipt downloaded for transaction: {transaction.reference}",
+            transaction=transaction,
+            request=request,
+        )
+
+        # ── Return PDF response ────────────────────────────────────────────────
+        filename = f'receipt_{transaction.reference}.pdf'
+        response = HttpResponse(pdf_bytes, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        response['Content-Length'] = len(pdf_bytes)
+
+        logger.info(
+            f'Receipt generated: {transaction.reference} | '
+            f'User: {request.user.username}'
+        )
+        return response
+
+
+# =============================================================================
+# Transaction Export (PDF + Excel)
+# =============================================================================
+
+class TransactionExportView(APIView):
+    """
+    GET /api/v1/payments/export/?format=pdf|excel
+                               &status=completed|failed|pending|cancelled
+                               &payment_method=mpesa|paystack
+                               &date_from=YYYY-MM-DD
+                               &date_to=YYYY-MM-DD
+
+    Admin: exports all transactions (with optional filters).
+    Staff: exports only their own transactions.
+    """
+    permission_classes = [IsAuthenticated, IsStaffOrAdmin]
+    renderer_classes = [JSONRenderer]  
+
+    def get(self, request):
+        export_format = request.query_params.get('export_format', 'pdf').lower()  
+
+        if export_format not in ('pdf', 'excel'):
+            return Response(
+                {'error': 'Invalid format. Use "pdf" or "excel".'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # ── Build queryset ─────────────────────────────────────────────────────
+        qs = Transaction.objects.filter(
+            is_deleted=False
+        ).select_related('user').order_by('-created_at')
+
+        if request.user.role != 'admin':
+            qs = qs.filter(user=request.user)
+
+        # Optional filters
+        status_filter = request.query_params.get('status')
+        method_filter = request.query_params.get('payment_method')
+        date_from     = request.query_params.get('date_from')
+        date_to       = request.query_params.get('date_to')
+
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+        if method_filter:
+            qs = qs.filter(payment_method=method_filter)
+        if date_from:
+            qs = qs.filter(created_at__date__gte=date_from)
+        if date_to:
+            qs = qs.filter(created_at__date__lte=date_to)
+
+        transactions = list(qs)
+
+        # ── Aggregate stats ────────────────────────────────────────────────────
+        total_amount    = qs.filter(status='completed').aggregate(t=Sum('amount'))['t'] or Decimal('0.00')
+        total_count     = qs.count()
+        completed_count = qs.filter(status='completed').count()
+        failed_count    = qs.filter(status='failed').count()
+        pending_count   = qs.filter(status='pending').count()
+
+        context = {
+            'transactions':    transactions,
+            'generated_at':    timezone.now(),
+            'exported_by':     request.user.get_full_name() or request.user.username,
+            'total_count':     total_count,
+            'total_amount':    total_amount,
+            'completed_count': completed_count,
+            'failed_count':    failed_count,
+            'pending_count':   pending_count,
+            'status_filter':   status_filter,
+            'method_filter':   method_filter,
+            'date_from':       date_from,
+            'date_to':         date_to,
+        }
+
+        # ── Audit log ──────────────────────────────────────────────────────────
+        _create_audit_log(
+            user=request.user,
+            action_type='transactions_exported',
+            description=(
+                f"Transactions exported as {export_format.upper()}: "
+                f"{total_count} records | "
+                f"Filters: status={status_filter}, method={method_filter}, "
+                f"date_from={date_from}, date_to={date_to}"
+            ),
+            request=request,
+        )
+
+        if export_format == 'pdf':
+            return self._export_pdf(context)
+        return self._export_excel(transactions, context)
+
+    # ── PDF export ─────────────────────────────────────────────────────────────
+
+    def _export_pdf(self, context):
+        try:
+            html_content = render_to_string('payments/export_pdf.html', context)
+        except Exception as e:
+            logger.error(f'Export PDF template render failed: {e}')
+            return Response(
+                {'error': 'Failed to generate export.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        try:
+            from weasyprint import HTML
+            from weasyprint.text.fonts import FontConfiguration
+
+            font_config = FontConfiguration()
+            pdf_bytes = HTML(string=html_content, base_url=None).write_pdf(
+                font_config=font_config,
+            )
+        except Exception as e:
+            logger.error(f'WeasyPrint export PDF failed: {e}')
+            return Response(
+                {'error': 'PDF generation failed.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        timestamp = timezone.now().strftime('%Y%m%d_%H%M')
+        filename  = f'transactions_export_{timestamp}.pdf'
+        response  = HttpResponse(pdf_bytes, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        response['Content-Length'] = len(pdf_bytes)
+
+        logger.info(
+            f'PDF export: {context["total_count"]} transactions | '
+            f'User: {context["exported_by"]}'
+        )
+        return response
+
+    # ── Excel export ───────────────────────────────────────────────────────────
+
+    def _export_excel(self, transactions, context):
+        try:
+            import openpyxl
+            from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+            from openpyxl.utils import get_column_letter
+        except ImportError:
+            return Response(
+                {'error': 'Excel export unavailable. Install openpyxl.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = 'Transactions'
+
+        GREEN  = '1a3d2b'
+        ORANGE = 'c45c1a'
+        LIGHT  = 'f8faf9'
+        WHITE  = 'ffffff'
+
+        # ── Title row ──────────────────────────────────────────────────────────
+        ws.merge_cells('A1:I1')
+        title_cell = ws['A1']
+        title_cell.value = 'DEWLON SYSTEMS — TRANSACTIONS EXPORT'
+        title_cell.font      = Font(name='Calibri', bold=True, size=14, color=WHITE)
+        title_cell.fill      = PatternFill('solid', fgColor=GREEN)
+        title_cell.alignment = Alignment(horizontal='center', vertical='center')
+        ws.row_dimensions[1].height = 30
+
+        # ── Subtitle row ───────────────────────────────────────────────────────
+        ws.merge_cells('A2:I2')
+        sub_cell = ws['A2']
+        sub_cell.value = (
+            f'Generated: {context["generated_at"].strftime("%d %b %Y %H:%M")} UTC  |  '
+            f'Exported by: {context["exported_by"]}  |  '
+            f'Total: {context["total_count"]} records  |  '
+            f'Completed Amount: KES {context["total_amount"]:,.2f}'
+        )
+        sub_cell.font      = Font(name='Calibri', size=9, color='555555')
+        sub_cell.fill      = PatternFill('solid', fgColor='f0f4f1')
+        sub_cell.alignment = Alignment(horizontal='center', vertical='center')
+        ws.row_dimensions[2].height = 18
+
+        # ── Header row ─────────────────────────────────────────────────────────
+        headers    = ['#', 'Reference', 'Date & Time', 'User', 'Email', 'Method', 'Provider Ref', 'Status', 'Amount (KES)']
+        header_row = 3
+        for col_idx, header in enumerate(headers, start=1):
+            cell = ws.cell(row=header_row, column=col_idx, value=header)
+            cell.font      = Font(name='Calibri', bold=True, size=9, color=WHITE)
+            cell.fill      = PatternFill('solid', fgColor=GREEN)
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+            cell.border    = Border(bottom=Side(style='thin', color=ORANGE))
+        ws.row_dimensions[header_row].height = 22
+
+        # ── Data rows ──────────────────────────────────────────────────────────
+        thin_border = Border(bottom=Side(style='thin', color='e5e7eb'))
+
+        status_colors = {
+            'completed': ('dcfce7', '15803d'),
+            'failed':    ('fee2e2', 'dc2626'),
+            'pending':   ('fef3c7', 'd97706'),
+            'cancelled': ('f3f4f6', '6b7280'),
+        }
+        method_colors = {
+            'mpesa':    ('dcfce7', '15803d'),
+            'paystack': ('dbeafe', '1d4ed8'),
+        }
+
+        for row_idx, tx in enumerate(transactions, start=1):
+            excel_row  = row_idx + header_row
+            fill_color = LIGHT if row_idx % 2 == 0 else WHITE
+
+            row_data = [
+                row_idx,
+                tx.reference,
+                tx.created_at.strftime('%d %b %Y %H:%M'),
+                tx.user.get_full_name() or tx.user.username,
+                tx.user.email,
+                'M-Pesa' if tx.payment_method == 'mpesa' else 'Paystack',
+                tx.provider_reference or '—',
+                tx.status.title(),
+                float(tx.amount),
+            ]
+
+            for col_idx, value in enumerate(row_data, start=1):
+                cell = ws.cell(row=excel_row, column=col_idx, value=value)
+                cell.font      = Font(name='Calibri', size=9)
+                cell.fill      = PatternFill('solid', fgColor=fill_color)
+                cell.border    = thin_border
+                cell.alignment = Alignment(vertical='center')
+
+                if col_idx == 8:   # Status
+                    sc = status_colors.get(tx.status, ('f3f4f6', '6b7280'))
+                    cell.fill      = PatternFill('solid', fgColor=sc[0])
+                    cell.font      = Font(name='Calibri', size=9, bold=True, color=sc[1])
+                    cell.alignment = Alignment(horizontal='center', vertical='center')
+
+                if col_idx == 6:   # Method
+                    mc = method_colors.get(tx.payment_method, ('f3f4f6', '6b7280'))
+                    cell.fill      = PatternFill('solid', fgColor=mc[0])
+                    cell.font      = Font(name='Calibri', size=9, bold=True, color=mc[1])
+                    cell.alignment = Alignment(horizontal='center', vertical='center')
+
+                if col_idx == 9:   # Amount
+                    cell.number_format = '#,##0.00'
+                    cell.alignment     = Alignment(horizontal='right', vertical='center')
+                    cell.font          = Font(name='Calibri', size=9, bold=True, color=GREEN)
+
+                if col_idx in (2, 7):   # Reference / Provider ref
+                    cell.font = Font(name='Courier New', size=8.5, color='1a3d2b')
+
+            ws.row_dimensions[excel_row].height = 18
+
+        # ── Summary rows ───────────────────────────────────────────────────────
+        summary_row = len(transactions) + header_row + 2
+
+        ws.merge_cells(f'A{summary_row}:H{summary_row}')
+        ws[f'A{summary_row}'].value     = 'SUMMARY'
+        ws[f'A{summary_row}'].font      = Font(name='Calibri', bold=True, size=9, color=WHITE)
+        ws[f'A{summary_row}'].fill      = PatternFill('solid', fgColor=GREEN)
+        ws[f'A{summary_row}'].alignment = Alignment(horizontal='left', vertical='center')
+        ws[f'I{summary_row}'].fill      = PatternFill('solid', fgColor=GREEN)
+        ws.row_dimensions[summary_row].height = 18
+
+        summary_data = [
+            ('Total Records',      context['total_count']),
+            ('Completed',          context['completed_count']),
+            ('Failed',             context['failed_count']),
+            ('Pending',            context['pending_count']),
+            ('Total Amount (KES)', float(context['total_amount'])),
+        ]
+
+        for i, (label, value) in enumerate(summary_data):
+            r = summary_row + 1 + i
+            ws.merge_cells(f'A{r}:H{r}')
+            ws[f'A{r}'].value     = label
+            ws[f'A{r}'].font      = Font(name='Calibri', size=9, color='374151')
+            ws[f'A{r}'].fill      = PatternFill('solid', fgColor='f0f4f1')
+            ws[f'I{r}'].value     = value
+            ws[f'I{r}'].font      = Font(name='Calibri', bold=True, size=9, color=GREEN)
+            ws[f'I{r}'].fill      = PatternFill('solid', fgColor='f0f4f1')
+            if label == 'Total Amount (KES)':
+                ws[f'I{r}'].number_format = '#,##0.00'
+            ws.row_dimensions[r].height = 16
+
+        # ── Column widths ──────────────────────────────────────────────────────
+        col_widths = [5, 16, 18, 22, 28, 11, 20, 12, 14]
+        for i, width in enumerate(col_widths, start=1):
+            ws.column_dimensions[get_column_letter(i)].width = width
+
+        ws.freeze_panes = f'A{header_row + 1}'
+
+        # ── Write to buffer ────────────────────────────────────────────────────
+        buffer = io.BytesIO()
+        wb.save(buffer)
+        buffer.seek(0)
+        excel_bytes = buffer.getvalue()
+
+        timestamp = timezone.now().strftime('%Y%m%d_%H%M')
+        filename  = f'transactions_export_{timestamp}.xlsx'
+        response  = HttpResponse(
+            excel_bytes,
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        response['Content-Length'] = len(excel_bytes)
+
+        logger.info(
+            f'Excel export: {context["total_count"]} transactions | '
+            f'User: {context["exported_by"]}'
+        )
+        return response
