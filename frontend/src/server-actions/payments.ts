@@ -107,6 +107,7 @@ export interface PaystackVerifyResponse {
   transaction?: TransactionResponse;
 }
 
+
 export async function verifyPaystackPaymentAction(
   reference: string
 ): Promise<ApiResponse<PaystackVerifyResponse>> {
