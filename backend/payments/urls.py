@@ -6,7 +6,8 @@ from .views import (
     InitiatePaymentView,
     MpesaCallbackView,
     PaystackWebhookView,
-    TransactionSummaryView
+    PaystackVerifyView,
+    TransactionSummaryView,
 )
 
 app_name = 'payments'
@@ -21,6 +22,9 @@ urlpatterns = [
 
     # Payment initiation
     path('initiate/', InitiatePaymentView.as_view(), name='initiate-payment'),
+
+    # Paystack verify (called from frontend after redirect back)
+    path('paystack/verify/', PaystackVerifyView.as_view(), name='paystack-verify'),
 
     # Payment callbacks/webhooks (public endpoints)
     path('callbacks/mpesa/', MpesaCallbackView.as_view(), name='mpesa-callback'),

@@ -6,8 +6,10 @@ from rest_framework import generics, status, viewsets
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
+from rest_framework.decorators import action
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import OrderingFilter, SearchFilter
+from rest_framework.exceptions import NotFound
 
 from core.permissions import IsAdminUser, IsOwnerOrAdmin
 from core.utils import generate_temporary_password
@@ -18,27 +20,34 @@ from .serializers import (
     PasswordResetRequestAdminSerializer
 )
 
-
 logger = logging.getLogger('users')
 
 
 class UserProfileView(APIView):
     """
     View for users to view and update their own profile.
+    Endpoint: /api/v1/users/profile/
+    ⚠️ DEPRECATED: Use UserViewSet.profile @action instead
     """
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        """
-        Return current user's profile information.
-        """
+        """Return current user's profile information."""
+        if not request.user or not request.user.is_authenticated:
+            return Response(
+                {'error': 'Authentication required'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
         serializer = UserSerializer(request.user)
         return Response(serializer.data)
 
     def put(self, request):
-        """
-        Update current user's profile information.
-        """
+        """Update current user's profile information."""
+        if not request.user or not request.user.is_authenticated:
+            return Response(
+                {'error': 'Authentication required'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
         serializer = UserUpdateSerializer(request.user, data=request.data, context={'request': request})
         if serializer.is_valid():
             serializer.save()
@@ -55,9 +64,13 @@ class PasswordChangeView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        """
-        Change user's password.
-        """
+        """Change user's password."""
+        if not request.user or not request.user.is_authenticated:
+            return Response(
+                {'error': 'Authentication required'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
         serializer = PasswordChangeSerializer(data=request.data)
         if serializer.is_valid():
             user = request.user
@@ -75,7 +88,6 @@ class PasswordChangeView(APIView):
             user.save()
 
             logger.info(f"User {user.username} changed their password")
-
             return Response({'message': 'Password changed successfully'})
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -88,15 +100,19 @@ class PasswordResetRequestView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        """
-        Submit password reset request.
-        """
+        """Submit password reset request."""
+        if not request.user or not request.user.is_authenticated:
+            return Response(
+                {'error': 'Authentication required'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
         serializer = PasswordResetRequestSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             reset_request = serializer.save()
             logger.info(f"Password reset request submitted by {request.user.username}")
 
-            # Notify admins via WebSocket (handled by notifications app)
+            # Notify admins via WebSocket
             from channels.layers import get_channel_layer
             from asgiref.sync import async_to_sync
 
@@ -123,7 +139,12 @@ class PasswordResetRequestView(APIView):
 class UserViewSet(viewsets.ModelViewSet):
     """
     ViewSet for admin user management.
-    Admins can create, view, update, and delete users.
+    Endpoint: /api/v1/users/{id}/
+    
+    🔒 SECURITY FEATURES:
+    - Admin-only permissions for CRUD operations
+    - @action profile endpoint for current user (self-service)
+    - Defense-in-depth against PK manipulation
     """
     queryset = CustomUser.objects.filter(is_deleted=False)
     permission_classes = [IsAuthenticated, IsAdminUser]
@@ -139,10 +160,140 @@ class UserViewSet(viewsets.ModelViewSet):
             return UserUpdateSerializer
         return UserSerializer
 
+    def get_object(self):
+        """
+        Override to prevent ValueError if non-integer PK is passed.
+        Adds defense-in-depth against routing errors.
+        """
+        pk = self.kwargs.get('pk')
+        # If PK is not a valid integer, raise 404 immediately instead of ValueError
+        try:
+            int(pk)
+        except (ValueError, TypeError):
+            raise NotFound(detail=f"User with ID '{pk}' not found.")
+        return super().get_object()
+
+    @action(
+        detail=False, 
+        methods=['get', 'put', 'patch'], 
+        permission_classes=[IsAuthenticated],
+        url_path='profile',
+        url_name='profile'
+    )
+    def profile(self, request):
+        """
+        Handle /api/v1/users/profile/ for current user.
+        
+        🔒 SECURITY: User identity comes from authentication token (request.user),
+        NOT from request body. This prevents users from impersonating others.
+        
+        ✅ Robust features:
+        - Explicit serializer (no get_serializer_class() ambiguity)
+        - Comprehensive error handling
+        - Detailed logging
+        - Context passing for permission checks
+        - Router-registered (immune to URL ordering issues)
+        """
+        # ─────────────────────────────────────────────────────────────────────────
+        # SAFETY LAYER 1: Verify authenticated user exists
+        # ─────────────────────────────────────────────────────────────────────────
+        if not request.user or not request.user.is_authenticated:
+            logger.warning(f"Unauthenticated access attempt to profile endpoint")
+            return Response(
+                {'error': 'Authentication required'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        user = request.user
+        
+        # ─────────────────────────────────────────────────────────────────────────
+        # SAFETY LAYER 2: Verify user account is active
+        # ─────────────────────────────────────────────────────────────────────────
+        if not user.is_active:
+            logger.warning(f"Inactive user {user.username} attempted profile access")
+            return Response(
+                {'error': 'Account is deactivated'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # ─────────────────────────────────────────────────────────────────────────
+        # HANDLE GET REQUEST - Return current user profile
+        # ─────────────────────────────────────────────────────────────────────────
+        if request.method == 'GET':
+            try:
+                serializer = UserSerializer(user, context={'request': request})
+                return Response(serializer.data)
+            except Exception as e:
+                logger.error(f"Error serializing user {user.username} profile: {str(e)}")
+                return Response(
+                    {'error': 'Failed to retrieve profile'},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+        
+        # ─────────────────────────────────────────────────────────────────────────
+        # HANDLE PUT/PATCH REQUEST - Update current user profile
+        # ─────────────────────────────────────────────────────────────────────────
+        elif request.method in ['PUT', 'PATCH']:
+            # ✅ CRITICAL: Use UserUpdateSerializer explicitly
+            # This serializer does NOT require 'username' in request body
+            # User identity is from request.user (authentication token)
+            try:
+                serializer = UserUpdateSerializer(
+                    instance=user,
+                    data=request.data,
+                    partial=(request.method == 'PATCH'),
+                    context={'request': request}  # ✅ Pass context for permission checks
+                )
+                
+                # ✅ Validate data
+                if not serializer.is_valid():
+                    logger.warning(
+                        f"Profile update validation failed for user {user.username}: "
+                        f"{serializer.errors}"
+                    )
+                    return Response(
+                        serializer.errors,
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                # ✅ Save changes
+                serializer.save()
+                
+                # ✅ Log successful update
+                logger.info(
+                    f"Profile updated successfully | User: {user.username} | "
+                    f"IP: {request.META.get('REMOTE_ADDR')} | "
+                    f"Fields: {list(request.data.keys())}"
+                )
+                
+                # ✅ Return updated profile
+                return Response(
+                    UserSerializer(user, context={'request': request}).data,
+                    status=status.HTTP_200_OK
+                )
+                
+            except Exception as e:
+                # ✅ Catch any unexpected errors
+                logger.error(
+                    f"Profile update failed for user {user.username}: {str(e)}",
+                    exc_info=True
+                )
+                return Response(
+                    {'error': 'Failed to update profile', 'detail': str(e)},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+        
+        # ─────────────────────────────────────────────────────────────────────────
+        # UNSUPPORTED METHOD
+        # ─────────────────────────────────────────────────────────────────────────
+        else:
+            return Response(
+                {'error': f'Method {request.method} not allowed'},
+                status=status.HTTP_405_METHOD_NOT_ALLOWED
+            )
+
     def perform_create(self, serializer):
-        """
-        Create user and send temporary password via email.
-        """
+        """Create user and send temporary password via email."""
         user = serializer.save()
 
         # Send email with temporary password
@@ -176,9 +327,7 @@ class UserViewSet(viewsets.ModelViewSet):
         )
 
     def perform_destroy(self, instance):
-        """
-        Soft delete user and blacklist their tokens.
-        """
+        """Soft delete user and blacklist their tokens."""
         # Blacklist user's tokens
         from rest_framework_simplejwt.tokens import RefreshToken
 
@@ -205,9 +354,7 @@ class UserViewSet(viewsets.ModelViewSet):
         )
 
     def perform_update(self, serializer):
-        """
-        Update user and notify via WebSocket.
-        """
+        """Update user and notify via WebSocket."""
         user = serializer.save()
 
         logger.info(f"User {user.username} updated by admin {self.request.user.username}")
@@ -236,10 +383,7 @@ class UserActionView(APIView):
     permission_classes = [IsAuthenticated, IsAdminUser]
 
     def post(self, request, user_id, action):
-        """
-        Perform action on user.
-        Actions: disable, enable, reset_password
-        """
+        """Perform action on user."""
         try:
             user = CustomUser.objects.get(pk=user_id, is_deleted=False)
         except CustomUser.DoesNotExist:
@@ -324,10 +468,7 @@ class PasswordResetRequestActionView(APIView):
     permission_classes = [IsAuthenticated, IsAdminUser]
 
     def post(self, request, request_id, action):
-        """
-        Approve or reject password reset request.
-        Actions: approve, reject
-        """
+        """Approve or reject password reset request."""
         try:
             reset_request = PasswordResetRequest.objects.get(pk=request_id, status='pending')
         except PasswordResetRequest.DoesNotExist:

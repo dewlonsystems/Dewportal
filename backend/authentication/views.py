@@ -156,10 +156,16 @@ class VerifySessionView(APIView):
                 'id': user.id,
                 'username': user.username,
                 'email': user.email,
+                'phone_number': user.phone_number,
                 'first_name': user.first_name,
                 'last_name': user.last_name,
                 'role': user.role,
-                'must_change_password': user.must_change_password
+                'is_active': user.is_active, 
+                'is_locked': user.is_locked,   
+                'last_seen': user.last_seen.isoformat() if user.last_seen else None,
+                'must_change_password': user.must_change_password,
+                'created_at': user.created_at.isoformat(),
+                'updated_at': user.updated_at.isoformat(),
             },
             'session_valid': True
         })

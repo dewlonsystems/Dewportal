@@ -1,22 +1,25 @@
+# =============================================================================
+# DEWPORTAL BACKEND - PAYMENTS VIEWS
+# =============================================================================
 import logging
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
+from django.db.models import Sum
 from rest_framework import generics, status, viewsets
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import OrderingFilter, SearchFilter
-from django.db.models import Sum, Count, Q
 
-from core.permissions import IsStaffOrAdmin, IsOwnerOrAdmin, IsM2MAuthenticated
+from core.permissions import IsStaffOrAdmin, IsOwnerOrAdmin
 from .models import Transaction
 from .serializers import (
     TransactionSerializer,
     TransactionInitiateSerializer,
     MpesaCallbackSerializer,
-    PaystackWebhookSerializer
+    PaystackWebhookSerializer,
 )
 from .mpesa import MpesaService
 from .paystack import PaystackService
@@ -24,13 +27,96 @@ from .paystack import PaystackService
 logger = logging.getLogger('payments')
 
 
+# =============================================================================
+# Helpers
+# =============================================================================
+
+def _push_to_websocket(group_name: str, event_type: str, data: dict):
+    """
+    Push a message to a Django Channels group safely.
+    Swallows errors so a Channels failure never breaks a payment callback.
+    """
+    try:
+        from channels.layers import get_channel_layer
+        from asgiref.sync import async_to_sync
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            group_name,
+            {'type': event_type, 'data': data},
+        )
+    except Exception as e:
+        logger.error(f"WebSocket push failed [{group_name}]: {str(e)}")
+
+
+def _notify_payment_update(transaction: Transaction, result_desc: str = None):
+    """
+    Push payment_status_update to the user's personal WS channel
+    and a transaction_update to the admin channel.
+    """
+    payload = {
+        'transaction_id': transaction.id,
+        'reference':      transaction.reference,
+        'status':         transaction.status,
+        'amount':         str(transaction.amount),
+        'payment_method': transaction.payment_method,
+        'result_desc':    result_desc or '',
+    }
+
+    # ── User channel ──────────────────────────────────────────────────────────
+    _push_to_websocket(
+        f'user_{transaction.user.id}',
+        'payment_status_update',   # matches frontend WebSocket listener
+        payload,
+    )
+
+    # ── Admin channel ─────────────────────────────────────────────────────────
+    _push_to_websocket(
+        'admin_notifications',
+        'transaction_update',
+        {**payload, 'user_id': transaction.user.id, 'username': transaction.user.username},
+    )
+
+
+def _create_audit_log(user, action_type: str, description: str,
+                      transaction: Transaction = None, request=None,
+                      severity: str = 'info'):
+    """
+    Create an audit log entry, swallowing errors so audit never breaks payments.
+    """
+    try:
+        from audit.models import AuditLog
+        ip = None
+        if request:
+            xff = request.META.get('HTTP_X_FORWARDED_FOR')
+            ip = xff.split(',')[0].strip() if xff else request.META.get('REMOTE_ADDR')
+
+        AuditLog.objects.create(
+            user=user,
+            action_type=action_type,
+            severity=severity,
+            category='payment',
+            description=description,
+            ip_address=ip,
+            details={
+                'transaction_id':  transaction.id        if transaction else None,
+                'reference':       transaction.reference if transaction else None,
+                'amount':          str(transaction.amount) if transaction else None,
+                'payment_method':  transaction.payment_method if transaction else None,
+            },
+        )
+    except Exception as e:
+        logger.error(f"Audit log creation failed: {str(e)}")
+
+
+# =============================================================================
+# Transaction ViewSet
+# =============================================================================
+
 class TransactionViewSet(viewsets.ReadOnlyModelViewSet):
     """
-    ViewSet for viewing transactions.
-    
-    Role-based filtering:
-    - Admin: All transactions across all users
-    - Staff: Only their own transactions
+    Read-only viewset.
+    Admin → all transactions.
+    Staff → own transactions only.
     """
     queryset = Transaction.objects.filter(is_deleted=False).select_related('user')
     permission_classes = [IsAuthenticated, IsStaffOrAdmin]
@@ -42,334 +128,475 @@ class TransactionViewSet(viewsets.ReadOnlyModelViewSet):
     ordering = ['-created_at']
 
     def get_queryset(self):
-        """
-        Filter transactions based on user role.
-        """
-        queryset = super().get_queryset()
-        user = self.request.user
+        qs = super().get_queryset()
+        if self.request.user.role == 'staff':
+            qs = qs.filter(user=self.request.user)
+        return qs
 
-        if user.role == 'staff':
-            queryset = queryset.filter(user=user)
 
-        return queryset
-
+# =============================================================================
+# Transaction Detail
+# =============================================================================
 
 class TransactionDetailView(generics.RetrieveAPIView):
-    """
-    View for viewing a single transaction detail.
-    """
     queryset = Transaction.objects.filter(is_deleted=False).select_related('user')
     permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
     serializer_class = TransactionSerializer
 
 
+# =============================================================================
+# Initiate Payment
+# =============================================================================
+
 class InitiatePaymentView(APIView):
     """
-    View for initiating a payment transaction.
+    POST /api/payments/initiate/
+    Initiate an Mpesa STK Push or a Paystack checkout.
     """
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        """
-        Initiate payment via Mpesa or Paystack.
-        """
         serializer = TransactionInitiateSerializer(data=request.data)
-        if serializer.is_valid():
-            user = request.user
-            payment_method = serializer.validated_data['payment_method']
-            amount = serializer.validated_data['amount']
-            phone_number = serializer.validated_data.get('phone_number')
-            description = serializer.validated_data.get('description')
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-            # Create transaction record
-            transaction = Transaction.objects.create(
-                user=user,
-                amount=amount,
-                payment_method=payment_method,
-                status='pending',
-                mpesa_phone_number=phone_number if payment_method == 'mpesa' else None,
-                description=description
-            )
+        user           = request.user
+        payment_method = serializer.validated_data['payment_method']
+        amount         = serializer.validated_data['amount']
+        phone_number   = serializer.validated_data.get('phone_number')
+        description    = serializer.validated_data.get('description', '')
 
-            logger.info(f"Transaction created: {transaction.reference}")
+        # ── Create pending transaction ─────────────────────────────────────────
+        transaction = Transaction.objects.create(
+            user=user,
+            amount=amount,
+            payment_method=payment_method,
+            status='pending',
+            mpesa_phone_number=phone_number if payment_method == 'mpesa' else None,
+            description=description,
+        )
+        logger.info(f"Transaction created: {transaction.reference} | {user.username} | {amount} KES")
 
-            if payment_method == 'mpesa':
-                return self._initiate_mpesa(transaction, phone_number, amount)
-            elif payment_method == 'paystack':
-                return self._initiate_paystack(transaction, amount)
+        _create_audit_log(
+            user=user,
+            action_type='transaction_initiated',
+            description=f"{payment_method.title()} payment initiated: {transaction.reference}",
+            transaction=transaction,
+            request=request,
+        )
 
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        if payment_method == 'mpesa':
+            return self._initiate_mpesa(transaction, phone_number, amount, request)
+        return self._initiate_paystack(transaction, user.email, amount, request)
 
-    def _initiate_mpesa(self, transaction, phone_number, amount):
-        """
-        Initiate Mpesa STK Push.
-        """
+    # ── Mpesa ──────────────────────────────────────────────────────────────────
+
+    def _initiate_mpesa(self, transaction, phone_number, amount, request):
         try:
-            mpesa = MpesaService()
-            result = mpesa.initiate_stk_push(
+            result = MpesaService().initiate_stk_push(
                 phone_number=phone_number,
                 amount=amount,
                 transaction_reference=transaction.reference,
-                account_reference=transaction.reference
+                account_reference=transaction.reference,
             )
 
             if result.get('success'):
-                transaction.mpesa_checkout_request_id = result.get('checkout_request_id')
-                transaction.provider_reference = result.get('merchant_request_id')
-                transaction.mpesa_response_description = result.get('response_description')
+                transaction.mpesa_checkout_request_id   = result.get('checkout_request_id')
+                transaction.provider_reference          = result.get('merchant_request_id')
+                transaction.mpesa_response_description  = result.get('response_description')
                 transaction.save(update_fields=[
                     'mpesa_checkout_request_id',
                     'provider_reference',
-                    'mpesa_response_description'
+                    'mpesa_response_description',
                 ])
-
-                logger.info(f"Mpesa STK Push initiated for {transaction.reference}")
+                logger.info(f"STK Push sent: {transaction.reference}")
 
                 return Response({
                     'success': True,
                     'transaction': TransactionSerializer(transaction).data,
                     'checkout_request_id': result.get('checkout_request_id'),
-                    'message': result.get('customer_message', 'STK Push sent to your phone')
+                    'message': result.get('customer_message', 'STK Push sent to your phone'),
                 }, status=status.HTTP_200_OK)
-            else:
-                transaction.status = 'failed'
-                transaction.mpesa_response_description = result.get('response_description', 'STK Push failed')
-                transaction.save(update_fields=['status', 'mpesa_response_description'])
 
-                logger.error(f"Mpesa STK Push failed for {transaction.reference}: {result}")
+            # STK Push failed immediately
+            transaction.status = 'failed'
+            transaction.mpesa_response_description = result.get('response_description', 'STK Push failed')
+            transaction.save(update_fields=['status', 'mpesa_response_description'])
 
-                return Response({
-                    'success': False,
-                    'error': result.get('response_description', 'STK Push initiation failed')
-                }, status=status.HTTP_400_BAD_REQUEST)
+            _create_audit_log(
+                user=transaction.user,
+                action_type='transaction_failed',
+                description=f"STK Push failed: {transaction.reference}",
+                transaction=transaction,
+                request=request,
+                severity='error',
+            )
+
+            return Response({
+                'success': False,
+                'error': result.get('response_description', 'STK Push initiation failed'),
+            }, status=status.HTTP_400_BAD_REQUEST)
 
         except Exception as e:
-            logger.error(f"Mpesa initiation error: {str(e)}")
+            logger.error(f"Mpesa initiation error [{transaction.reference}]: {str(e)}")
             transaction.status = 'failed'
             transaction.mpesa_response_description = str(e)
             transaction.save(update_fields=['status', 'mpesa_response_description'])
+            return Response({'success': False, 'error': 'Payment initiation failed'},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-            return Response({
-                'success': False,
-                'error': 'Payment initiation failed'
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    # ── Paystack ───────────────────────────────────────────────────────────────
 
-    def _initiate_paystack(self, transaction, amount):
-        """
-        Initiate Paystack transaction.
-        """
+    def _initiate_paystack(self, transaction, email, amount, request):
         try:
-            paystack = PaystackService()
-            result = paystack.initialize_transaction(
-                email=transaction.user.email,
+            result = PaystackService().initialize_transaction(
+                email=email,
                 amount=amount,
                 reference=transaction.reference,
                 metadata={
-                    'user_id': transaction.user.id,
+                    'user_id':        transaction.user.id,
                     'transaction_id': transaction.id,
-                    'username': transaction.user.username
-                }
+                    'username':       transaction.user.username,
+                },
             )
 
             if result.get('success'):
-                transaction.paystack_access_code = result.get('access_code')
+                transaction.paystack_access_code       = result.get('access_code')
                 transaction.paystack_authorization_url = result.get('authorization_url')
-                transaction.provider_reference = result.get('reference')
+                transaction.provider_reference         = result.get('reference')
                 transaction.save(update_fields=[
                     'paystack_access_code',
                     'paystack_authorization_url',
-                    'provider_reference'
+                    'provider_reference',
                 ])
-
-                logger.info(f"Paystack transaction initialized for {transaction.reference}")
+                logger.info(f"Paystack initialized: {transaction.reference}")
 
                 return Response({
                     'success': True,
-                    'transaction': TransactionSerializer(transaction).data,
+                    'transaction':      TransactionSerializer(transaction).data,
                     'authorization_url': result.get('authorization_url'),
-                    'access_code': result.get('access_code'),
-                    'message': 'Redirect to Paystack checkout to complete payment'
+                    'access_code':      result.get('access_code'),
+                    'message':          'Redirect to Paystack checkout to complete payment',
                 }, status=status.HTTP_200_OK)
-            else:
-                transaction.status = 'failed'
-                transaction.save(update_fields=['status'])
 
-                logger.error(f"Paystack initialization failed for {transaction.reference}: {result}")
-
-                return Response({
-                    'success': False,
-                    'error': result.get('error', 'Payment initialization failed')
-                }, status=status.HTTP_400_BAD_REQUEST)
-
-        except Exception as e:
-            logger.error(f"Paystack initiation error: {str(e)}")
             transaction.status = 'failed'
             transaction.save(update_fields=['status'])
 
+            _create_audit_log(
+                user=transaction.user,
+                action_type='transaction_failed',
+                description=f"Paystack init failed: {transaction.reference}",
+                transaction=transaction,
+                request=request,
+                severity='error',
+            )
+
             return Response({
                 'success': False,
-                'error': 'Payment initiation failed'
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                'error': result.get('error', 'Payment initialization failed'),
+            }, status=status.HTTP_400_BAD_REQUEST)
 
+        except Exception as e:
+            logger.error(f"Paystack initiation error [{transaction.reference}]: {str(e)}")
+            transaction.status = 'failed'
+            transaction.save(update_fields=['status'])
+            return Response({'success': False, 'error': 'Payment initiation failed'},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# =============================================================================
+# Paystack Verify  (called from frontend /payments/verify?reference=xxx)
+# =============================================================================
+
+class PaystackVerifyView(APIView):
+    """
+    GET /api/payments/paystack/verify/?reference=DP...
+    Called by the frontend verify page after Paystack redirects the user back.
+    We verify with Paystack's API and update the transaction if needed.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        reference = request.query_params.get('reference')
+        if not reference:
+            return Response({'error': 'Reference is required'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        # ── Find the transaction ───────────────────────────────────────────────
+        try:
+            transaction = Transaction.objects.get(reference=reference)
+        except Transaction.DoesNotExist:
+            return Response({'error': 'Transaction not found'},
+                            status=status.HTTP_404_NOT_FOUND)
+
+        # ── Ownership check ───────────────────────────────────────────────────
+        if request.user.role != 'admin' and transaction.user != request.user:
+            return Response({'error': 'Permission denied'},
+                            status=status.HTTP_403_FORBIDDEN)
+
+        # ── Already resolved — return immediately ─────────────────────────────
+        if transaction.status in ('completed', 'failed', 'cancelled'):
+            return Response({
+                'success': transaction.status == 'completed',
+                'status':  transaction.status,
+                'transaction': TransactionSerializer(transaction).data,
+            })
+
+        # ── Ask Paystack ───────────────────────────────────────────────────────
+        try:
+            result = PaystackService().verify_transaction(reference)
+        except Exception as e:
+            logger.error(f"Paystack verify API error [{reference}]: {str(e)}")
+            return Response({'error': 'Verification service unavailable'},
+                            status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+        if not result.get('success'):
+            return Response({
+                'success': False,
+                'status': 'pending',
+                'message': result.get('error', 'Verification failed — transaction may still be processing'),
+                'transaction': TransactionSerializer(transaction).data,
+            })
+
+        paystack_status = result.get('status')   # 'success', 'failed', 'abandoned'
+
+        # ── Map Paystack status → our status ──────────────────────────────────
+        if paystack_status == 'success':
+            if transaction.can_transition_to('completed'):
+                try:
+                    transaction.update_status(
+                        'completed',
+                        callback_payload=result,
+                        provider_reference=reference,
+                    )
+                    _notify_payment_update(transaction)
+                    _create_audit_log(
+                        user=request.user,
+                        action_type='transaction_completed',
+                        description=f"Paystack payment verified & completed: {reference}",
+                        transaction=transaction,
+                        request=request,
+                    )
+                except ValueError as e:
+                    logger.warning(f"Status transition error [{reference}]: {str(e)}")
+
+            return Response({
+                'success': True,
+                'status': 'completed',
+                'transaction': TransactionSerializer(transaction).data,
+            })
+
+        elif paystack_status in ('failed', 'abandoned'):
+            if transaction.can_transition_to('failed'):
+                try:
+                    transaction.update_status('failed', callback_payload=result)
+                    _notify_payment_update(transaction, result_desc=f"Paystack: {paystack_status}")
+                except ValueError:
+                    pass
+
+            return Response({
+                'success': False,
+                'status': 'failed',
+                'message': f'Payment {paystack_status} on Paystack',
+                'transaction': TransactionSerializer(transaction).data,
+            })
+
+        # pending / processing
+        return Response({
+            'success': False,
+            'status': 'pending',
+            'message': 'Payment is still being processed',
+            'transaction': TransactionSerializer(transaction).data,
+        })
+
+
+# =============================================================================
+# Mpesa Callback  (called by Safaricom Daraja — public endpoint)
+# =============================================================================
 
 @method_decorator(csrf_exempt, name='dispatch')
 class MpesaCallbackView(APIView):
     """
-    Mpesa STK Push callback endpoint.
-    Receives payment status from Safaricom Daraja API.
-    
-    This endpoint must be publicly accessible and HTTPS.
-    Protected by M2M authentication middleware.
-    """
-    permission_classes = [AllowAny]  # M2M middleware handles auth
-
-    def post(self, request):
-        """
-        Handle Mpesa callback.
-        """
-        serializer = MpesaCallbackSerializer(data=request.data)
-        if not serializer.is_valid():
-            logger.warning(f"Invalid Mpesa callback payload: {request.data}")
-            return Response({'status': 'rejected'}, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            mpesa = MpesaService()
-            callback_data = mpesa.parse_callback(request.data)
-
-            checkout_request_id = callback_data.get('checkout_request_id')
-            is_success = callback_data.get('success')
-            result_description = callback_data.get('result_description')
-            transaction_data = callback_data.get('transaction_data', {})
-
-            # Find transaction by checkout request ID
-            try:
-                transaction = Transaction.objects.get(
-                    mpesa_checkout_request_id=checkout_request_id
-                )
-            except Transaction.DoesNotExist:
-                logger.warning(f"Transaction not found for CheckoutRequestID: {checkout_request_id}")
-                return Response({'status': 'accepted'})
-
-            # Update transaction status
-            if is_success:
-                transaction.update_status(
-                    'completed',
-                    callback_payload=request.data,
-                    provider_reference=transaction_data.get('receipt_number')
-                )
-                transaction.mpesa_receipt_number = transaction_data.get('receipt_number')
-                transaction.save(update_fields=['mpesa_receipt_number'])
-                logger.info(f"Mpesa payment completed: {transaction.reference}")
-            else:
-                transaction.update_status(
-                    'failed',
-                    callback_payload=request.data
-                )
-                transaction.mpesa_response_description = result_description
-                transaction.save(update_fields=['mpesa_response_description'])
-                logger.info(f"Mpesa payment failed: {transaction.reference} - {result_description}")
-
-            return Response({'status': 'accepted'})
-
-        except Exception as e:
-            logger.error(f"Mpesa callback processing error: {str(e)}")
-            return Response({'status': 'accepted'})  # Always accept to prevent retries
-
-
-@method_decorator(csrf_exempt, name='dispatch')
-class PaystackWebhookView(APIView):
-    """
-    Paystack webhook endpoint.
-    Receives payment notifications from Paystack.
-    
-    This endpoint must be publicly accessible and HTTPS.
-    Protected by signature verification.
+    POST /api/payments/mpesa/callback/
+    Receives STK Push result from Safaricom. Always returns 200 to prevent retries.
     """
     permission_classes = [AllowAny]
 
     def post(self, request):
-        """
-        Handle Paystack webhook.
-        """
-        # Verify webhook signature
-        signature = request.headers.get('X-Paystack-Signature')
-        paystack = PaystackService()
+        serializer = MpesaCallbackSerializer(data=request.data)
+        if not serializer.is_valid():
+            logger.warning(f"Invalid Mpesa callback: {request.data}")
+            return Response({'status': 'rejected'}, status=status.HTTP_400_BAD_REQUEST)
 
-        if not paystack.verify_webhook_signature(request.body, signature):
-            logger.warning("Invalid Paystack webhook signature")
+        try:
+            callback   = MpesaService().parse_callback(request.data)
+            checkout_id = callback.get('checkout_request_id')
+            is_success  = callback.get('success')
+            result_desc = callback.get('result_description', '')
+            tx_data     = callback.get('transaction_data', {})
+
+            try:
+                transaction = Transaction.objects.select_related('user').get(
+                    mpesa_checkout_request_id=checkout_id
+                )
+            except Transaction.DoesNotExist:
+                logger.warning(f"No transaction for CheckoutRequestID: {checkout_id}")
+                return Response({'status': 'accepted'})   # still 200
+
+            new_status = 'completed' if is_success else 'failed'
+
+            if not transaction.can_transition_to(new_status):
+                logger.info(f"Skipping duplicate callback for {transaction.reference} "
+                            f"(already {transaction.status})")
+                return Response({'status': 'accepted'})
+
+            # ── Update transaction ────────────────────────────────────────────
+            transaction.update_status(
+                new_status,
+                callback_payload=request.data,
+                provider_reference=tx_data.get('receipt_number') if is_success else None,
+            )
+
+            if is_success:
+                transaction.mpesa_receipt_number = tx_data.get('receipt_number')
+                transaction.save(update_fields=['mpesa_receipt_number'])
+            else:
+                transaction.mpesa_response_description = result_desc
+                transaction.save(update_fields=['mpesa_response_description'])
+
+            # ── Push to frontend via WebSocket ────────────────────────────────
+            _notify_payment_update(
+                transaction,
+                result_desc=result_desc if not is_success else None,
+            )
+
+            # ── Audit ─────────────────────────────────────────────────────────
+            _create_audit_log(
+                user=transaction.user,
+                action_type='transaction_completed' if is_success else 'transaction_failed',
+                description=(
+                    f"Mpesa callback received: {transaction.reference} → {new_status}"
+                    + (f" | {result_desc}" if result_desc else '')
+                ),
+                transaction=transaction,
+                severity='info' if is_success else 'warning',
+            )
+
+            logger.info(
+                f"Mpesa callback processed: {transaction.reference} → {new_status}"
+                + (f" ({result_desc})" if not is_success else '')
+            )
+
+        except Exception as e:
+            logger.error(f"Mpesa callback error: {str(e)}", exc_info=True)
+            # Always return 200 — never let Safaricom retry due to our error
+
+        return Response({'status': 'accepted'})
+
+
+# =============================================================================
+# Paystack Webhook  (called by Paystack — public endpoint)
+# =============================================================================
+
+@method_decorator(csrf_exempt, name='dispatch')
+class PaystackWebhookView(APIView):
+    """
+    POST /api/payments/paystack/webhook/
+    Receives charge.success events from Paystack.
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        # ── Signature verification ─────────────────────────────────────────────
+        signature = request.headers.get('X-Paystack-Signature')
+        if not PaystackService().verify_webhook_signature(request.body, signature):
+            logger.warning("Invalid Paystack webhook signature — rejected")
             return Response({'status': 'rejected'}, status=status.HTTP_401_UNAUTHORIZED)
 
         try:
-            webhook_data = paystack.parse_webhook(request.data)
-            event = webhook_data.get('event')
+            data      = PaystackService().parse_webhook(request.data)
+            event     = data.get('event')
+            reference = data.get('reference')
 
-            # Only process charge.success events
             if event != 'charge.success':
-                logger.info(f"Paystack webhook event ignored: {event}")
+                logger.info(f"Paystack webhook ignored: {event}")
                 return Response({'status': 'accepted'})
 
-            reference = webhook_data.get('reference')
-
-            # Find transaction by reference
             try:
-                transaction = Transaction.objects.get(reference=reference)
+                transaction = Transaction.objects.select_related('user').get(
+                    reference=reference
+                )
             except Transaction.DoesNotExist:
-                logger.warning(f"Transaction not found for reference: {reference}")
+                logger.warning(f"No transaction for Paystack reference: {reference}")
                 return Response({'status': 'accepted'})
 
-            # Verify transaction amount matches
-            if webhook_data.get('amount') != float(transaction.amount):
-                logger.warning(f"Amount mismatch for {reference}")
+            # ── Amount guard ──────────────────────────────────────────────────
+            webhook_amount = data.get('amount', 0)
+            if abs(float(webhook_amount) - float(transaction.amount)) > 0.01:
+                logger.warning(
+                    f"Amount mismatch for {reference}: "
+                    f"expected {transaction.amount}, got {webhook_amount}"
+                )
                 return Response({'status': 'accepted'})
 
-            # Update transaction status
+            if not transaction.can_transition_to('completed'):
+                logger.info(f"Skipping duplicate Paystack webhook for {reference} "
+                            f"(already {transaction.status})")
+                return Response({'status': 'accepted'})
+
+            # ── Update transaction ────────────────────────────────────────────
             transaction.update_status(
                 'completed',
                 callback_payload=request.data,
-                provider_reference=reference
+                provider_reference=reference,
             )
-            logger.info(f"Paystack payment completed: {transaction.reference}")
 
-            return Response({'status': 'accepted'})
+            # ── Push to frontend via WebSocket ────────────────────────────────
+            _notify_payment_update(transaction)
+
+            # ── Audit ─────────────────────────────────────────────────────────
+            _create_audit_log(
+                user=transaction.user,
+                action_type='transaction_completed',
+                description=f"Paystack webhook confirmed: {reference}",
+                transaction=transaction,
+                severity='info',
+            )
+
+            logger.info(f"Paystack webhook processed: {reference} → completed")
 
         except Exception as e:
-            logger.error(f"Paystack webhook processing error: {str(e)}")
-            return Response({'status': 'accepted'})
+            logger.error(f"Paystack webhook error: {str(e)}", exc_info=True)
 
+        return Response({'status': 'accepted'})
+
+
+# =============================================================================
+# Transaction Summary
+# =============================================================================
 
 class TransactionSummaryView(APIView):
     """
-    View for transaction summary statistics.
-    Used for dashboard ATM-style summary cards.
+    GET /api/payments/summary/
+    Dashboard summary cards.
     """
     permission_classes = [IsAuthenticated, IsStaffOrAdmin]
 
     def get(self, request):
-        """
-        Return transaction summary.
-        """
         user = request.user
+        qs = Transaction.objects.filter(is_deleted=False)
+        if user.role != 'admin':
+            qs = qs.filter(user=user)
 
-        # Build filter based on role
-        if user.role == 'admin':
-            queryset = Transaction.objects.filter(is_deleted=False)
-        else:
-            queryset = Transaction.objects.filter(is_deleted=False, user=user)
-
-        # Calculate totals
-        total_revenue = queryset.filter(status='completed').aggregate(
+        total_revenue = qs.filter(status='completed').aggregate(
             total=Sum('amount')
         )['total'] or 0
 
-        completed_count = queryset.filter(status='completed').count()
-        pending_count = queryset.filter(status='pending').count()
-        failed_count = queryset.filter(status='failed').count()
-
         return Response({
-            'total_revenue': str(total_revenue),
-            'currency': 'KES',
-            'completed_transactions': completed_count,
-            'pending_transactions': pending_count,
-            'failed_transactions': failed_count,
-            'total_transactions': completed_count + pending_count + failed_count
+            'total_revenue':          str(total_revenue),
+            'currency':               'KES',
+            'completed_transactions': qs.filter(status='completed').count(),
+            'pending_transactions':   qs.filter(status='pending').count(),
+            'failed_transactions':    qs.filter(status='failed').count(),
+            'total_transactions':     qs.exclude(status='cancelled').count(),
         })

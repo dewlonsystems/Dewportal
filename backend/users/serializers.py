@@ -20,7 +20,7 @@ class UserSerializer(serializers.ModelSerializer):
             'last_seen', 'created_at', 'updated_at'
         ]
         read_only_fields = [
-            'id', 'is_locked', 'must_change_password', 'last_seen',
+            'id', 'username', 'is_locked', 'must_change_password', 'last_seen',
             'created_at', 'updated_at'
         ]
 
@@ -70,21 +70,60 @@ class UserCreateSerializer(serializers.ModelSerializer):
 class UserUpdateSerializer(serializers.ModelSerializer):
     """
     Serializer for updating user information.
-    Admins can update any field, users can only update their profile.
+    
+    🔒 SECURITY NOTES:
+    - Does NOT include 'username' field (cannot be changed via profile update)
+    - Does NOT include 'role', 'is_active' (admin-only fields)
+    - User identity comes from authentication token, NOT request body
     """
+    # ✅ Explicitly define allowed fields with validation
+    email = serializers.EmailField(required=False, allow_blank=True)
+    first_name = serializers.CharField(required=False, allow_blank=True, max_length=30)
+    last_name = serializers.CharField(required=False, allow_blank=True, max_length=30)
+    phone_number = serializers.CharField(required=False, allow_blank=True, max_length=20)
+
     class Meta:
         model = CustomUser
         fields = ['first_name', 'last_name', 'phone_number', 'email']
 
-    def update(self, instance, validated_data):
-        # Admins can update role and is_active
-        if self.context['request'].user.role == 'admin':
-            admin_fields = ['role', 'is_active']
-            for field in admin_fields:
-                if field in validated_data:
-                    instance.__dict__[field] = validated_data[field]
+    def validate_email(self, value):
+        """Ensure email is unique if provided."""
+        if value:
+            # Check if email is already taken by another user
+            existing = CustomUser.objects.filter(email=value).exclude(id=self.instance.id)
+            if existing.exists():
+                raise serializers.ValidationError('This email is already in use.')
+        return value
 
-        return super().update(instance, validated_data)
+    def validate(self, attrs):
+        """
+        Additional cross-field validation.
+        At least one field should be provided for updates.
+        """
+        if not attrs:
+            raise serializers.ValidationError(
+                'At least one field must be provided for update.'
+            )
+        return attrs
+
+    def update(self, instance, validated_data):
+        """
+        Update user instance with validated data.
+        
+        🔒 SECURITY: Admin-only fields are NOT accessible via this serializer.
+        Admins must use UserViewSet update action with admin permissions.
+        """
+        # ✅ Log what's being updated
+        update_fields = list(validated_data.keys())
+        
+        # ✅ Update each field
+        for field, value in validated_data.items():
+            setattr(instance, field, value)
+        
+        # ✅ Save with explicit field list (more efficient)
+        instance.save(update_fields=update_fields)
+        
+        return instance
 
 
 class PasswordChangeSerializer(serializers.Serializer):

@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, TokenRefreshSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.exceptions import TokenError
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 import logging
@@ -247,20 +248,26 @@ class LogoutSerializer(serializers.Serializer):
             request = self.context.get('request')
             ip_address = request.META.get('REMOTE_ADDR') if request else None
 
-            TokenBlacklistMetadata.objects.create(
+            TokenBlacklistMetadata.objects.get_or_create(
                 token_jti=refresh.payload.get('jti'),
-                user=user,
-                reason='logout',
-                ip_address=ip_address
+                defaults={
+                    'user': user,
+                    'reason': 'logout',
+                    'ip_address': ip_address,
+                }
             )
 
             logger.info(f"User {user.username if user else 'unknown'} logged out")
+            return attrs
 
+        except TokenError as e:
+            # ✅ Token already blacklisted or expired — user is already logged out
+            logger.info(f"Logout token already invalid: {str(e)}")
             return attrs
 
         except Exception as e:
-            logger.error(f"Logout failed: {str(e)}")
-            raise serializers.ValidationError({'error': 'Logout failed'})
+            logger.error(f"Logout failed: {str(e)}", exc_info=True)
+            raise serializers.ValidationError({'error': f'Logout failed: {str(e)}'})
 
 
 class ForcePasswordChangeSerializer(serializers.Serializer):
