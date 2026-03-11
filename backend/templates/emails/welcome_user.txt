@@ -1,0 +1,26 @@
+Welcome to Dewlon Portal, {{ user.first_name|default:user.username }}!
+
+Your account has been successfully created by an administrator.
+
+🔐 YOUR LOGIN CREDENTIALS:
+Username: {{ user.username }}
+Temporary Password: {{ temp_password }}
+
+🌐 Login at: {{ login_url }}
+
+⚠️ IMPORTANT SECURITY NOTICE:
+You MUST change your password immediately after your first login.
+This temporary password will not work after you've set your new password.
+
+Next Steps:
+1. Visit: {{ login_url }}
+2. Enter your username and temporary password
+3. Follow the prompts to create your new secure password
+4. Start using Dewlon Portal! 🎯
+
+If you did not request this account or believe this was sent in error,
+please contact our support team immediately at support@yourdomain.com.
+
+---
+© {% now "Y" %} Dewlon Portal. All rights reserved.
+This is an automated message. Please do not reply to this email.

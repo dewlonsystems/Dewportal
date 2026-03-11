@@ -2,6 +2,8 @@ import logging
 from django.utils import timezone
 from django.core.mail import send_mail
 from django.conf import settings
+from django.template.loader import render_to_string
+from django.utils.html import strip_tags
 from rest_framework import generics, status, viewsets
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -293,38 +295,101 @@ class UserViewSet(viewsets.ModelViewSet):
             )
 
     def perform_create(self, serializer):
-        """Create user and send temporary password via email."""
+        """
+        Create user and send temporary password via HTML email template.
+        
+        Flow:
+        1. Serializer creates user with auto-generated temp password
+        2. Extract plain text password from serializer result
+        3. Render HTML + plain text email templates
+        4. Send welcome email with credentials
+        5. Notify admins via WebSocket
+        """
+        # Create user (serializer handles password generation)
         user = serializer.save()
+        
+        # Get the plain text temporary password from serializer
+        temp_password = getattr(user, '_temp_password_plain', None)
+        
+        if not temp_password:
+            logger.error(f"CRITICAL: Failed to generate temp password for user {user.email}")
+            return
 
-        # Send email with temporary password
+        # Prepare template context
+        context = {
+            'user': user,
+            'temp_password': temp_password,
+            'login_url': getattr(settings, 'NEXTJS_URL', 'https://your-portal.com') + '/login',
+            'support_email': getattr(settings, 'DEFAULT_FROM_EMAIL', 'support@yourdomain.com'),
+            'current_year': timezone.now().year,
+        }
+
+        # ─────────────────────────────────────────────────────────────────────
+        # Render email templates (HTML + plain text fallback)
+        # ─────────────────────────────────────────────────────────────────────
+        try:
+            # Render HTML version
+            html_message = render_to_string('emails/welcome_user.html', context)
+            
+            # Generate plain text fallback from HTML
+            plain_message = strip_tags(html_message)
+            
+            # Also try to render plain text template if it exists (optional)
+            try:
+                plain_message = render_to_string('emails/welcome_user.txt', context)
+            except:
+                # Fallback to stripped HTML if .txt template doesn't exist
+                pass
+                
+        except Exception as e:
+            logger.error(f"Failed to render email template for user {user.email}: {str(e)}")
+            # Fallback to basic message if template rendering fails
+            html_message = f"<p>Welcome {user.first_name or user.username}! Your temp password: <strong>{temp_password}</strong></p>"
+            plain_message = f"Welcome {user.first_name or user.username}! Your temp password: {temp_password}"
+
+        # ─────────────────────────────────────────────────────────────────────
+        # Send welcome email with HTML + plain text
+        # ─────────────────────────────────────────────────────────────────────
         try:
             send_mail(
-                subject='Welcome to Dewlon Portal - Temporary Password',
-                message=f"Welcome {user.first_name}!\n\nYour temporary password is: {user.temporary_password}\n\nPlease log in and change your password immediately.",
+                subject='Welcome to Dewlon Portal - Your Temporary Password',
+                message=plain_message,              # Plain text fallback
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[user.email],
+                html_message=html_message,          # ✅ HTML version
                 fail_silently=False,
             )
-            logger.info(f"Welcome email sent to {user.email}")
+            logger.info(f"✅ Welcome email (HTML) sent to {user.email}")
+            
         except Exception as e:
-            logger.error(f"Failed to send welcome email to {user.email}: {str(e)}")
+            logger.error(f"❌ Failed to send welcome email to {user.email}: {str(e)}")
+            # Log for manual follow-up
 
-        # Notify admins via WebSocket
-        from channels.layers import get_channel_layer
-        from asgiref.sync import async_to_sync
+        # ─────────────────────────────────────────────────────────────────────
+        # Notify admins via WebSocket (real-time dashboard update)
+        # ─────────────────────────────────────────────────────────────────────
+        try:
+            from channels.layers import get_channel_layer
+            from asgiref.sync import async_to_sync
 
-        channel_layer = get_channel_layer()
-        async_to_sync(channel_layer.group_send)(
-            'admin_notifications',
-            {
-                'type': 'user_created',
-                'data': {
-                    'user_id': user.id,
-                    'username': user.username,
-                    'email': user.email
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                'admin_notifications',
+                {
+                    'type': 'user_created',
+                    'data': {
+                        'user_id': user.id,
+                        'username': user.username,
+                        'email': user.email,
+                        'role': user.role,
+                        'full_name': user.get_full_name(),
+                    }
                 }
-            }
-        )
+            )
+            logger.debug(f"WebSocket notification sent for new user: {user.username}")
+            
+        except Exception as e:
+            logger.warning(f"WebSocket notification failed for user {user.username}: {str(e)}")
 
     def perform_destroy(self, instance):
         """Soft delete user and blacklist their tokens."""
@@ -406,22 +471,50 @@ class UserActionView(APIView):
         elif action == 'reset_password':
             temp_password = generate_temporary_password()
             user.set_password(temp_password)
-            user.temporary_password = temp_password
-            user.must_change_password = True
-            user.save(update_fields=['temporary_password', 'must_change_password'])
+            user.must_change_password = True  # Force change on first login after reset
+            user.save(update_fields=['must_change_password'])
 
-            # Send email
+            # ─────────────────────────────────────────────────────────────────
+            # Send password reset email with HTML template
+            # ─────────────────────────────────────────────────────────────────
+            try:
+                from django.template.loader import render_to_string
+                from django.utils.html import strip_tags
+                
+                context = {
+                    'user': user,
+                    'temp_password': temp_password,
+                    'login_url': getattr(settings, 'NEXTJS_URL', 'https://your-portal.com') + '/login',
+                    'support_email': getattr(settings, 'DEFAULT_FROM_EMAIL', 'support@yourdomain.com'),
+                    'current_year': timezone.now().year,
+                    'is_password_reset': True,  # Flag for template to show reset messaging
+                }
+                
+                html_message = render_to_string('emails/password_reset.html', context)
+                plain_message = strip_tags(html_message)
+                
+                try:
+                    plain_message = render_to_string('emails/password_reset.txt', context)
+                except:
+                    pass
+                    
+            except Exception as e:
+                logger.error(f"Failed to render password reset template for {user.email}: {str(e)}")
+                html_message = f"<p>Your password has been reset. New temp password: <strong>{temp_password}</strong></p>"
+                plain_message = f"Your password has been reset. New temp password: {temp_password}"
+
             try:
                 send_mail(
                     subject='Password Reset - Dewlon Portal',
-                    message=f"Your password has been reset by an admin. Your temporary password is: {temp_password}\n\nPlease log in and change your password immediately.",
+                    message=plain_message,
                     from_email=settings.DEFAULT_FROM_EMAIL,
                     recipient_list=[user.email],
+                    html_message=html_message,
                     fail_silently=False,
                 )
-                logger.info(f"Password reset email sent to {user.email}")
+                logger.info(f"✅ Password reset email (HTML) sent to {user.email}")
             except Exception as e:
-                logger.error(f"Failed to send password reset email to {user.email}: {str(e)}")
+                logger.error(f"❌ Failed to send password reset email to {user.email}: {str(e)}")
 
             message = f"Password reset for {user.username}. Temporary password sent via email."
 

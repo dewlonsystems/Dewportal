@@ -34,36 +34,65 @@ class UserSerializer(serializers.ModelSerializer):
 class UserCreateSerializer(serializers.ModelSerializer):
     """
     Serializer for creating new users (admin only).
-    Generates temporary password and sends via email.
+    
+    🔐 SECURITY FLOW:
+    - Admin does NOT provide password
+    - System auto-generates secure temporary password
+    - Password is hashed and stored; plain text sent via email
+    - User MUST change password on first login (must_change_password=True)
     """
-    password = serializers.CharField(
-        write_only=True,
-        required=False,
-        validators=[validate_password]
-    )
-    confirm_password = serializers.CharField(write_only=True, required=False)
+    # ❌ NO password or confirm_password fields - admin doesn't provide them
 
     class Meta:
         model = CustomUser
         fields = [
-            'username', 'email', 'first_name', 'last_name', 'phone_number',
-            'role', 'password', 'confirm_password'
+            'username', 'email', 'first_name', 'last_name', 
+            'phone_number', 'role'
         ]
+        extra_kwargs = {
+            'username': {'required': True, 'allow_blank': False},
+            'email': {'required': True, 'allow_blank': False},
+            'role': {'required': True},
+            'first_name': {'required': True, 'allow_blank': False},
+            'last_name': {'required': True, 'allow_blank': False},
+        }
 
-    def validate(self, attrs):
-        if attrs.get('password') and attrs.get('password') != attrs.get('confirm_password'):
-            raise serializers.ValidationError({'confirm_password': 'Passwords do not match.'})
-        return attrs
+    def validate_email(self, value):
+        """Ensure email is unique."""
+        if CustomUser.objects.filter(email=value, is_deleted=False).exists():
+            raise serializers.ValidationError('A user with this email already exists.')
+        return value
+
+    def validate_username(self, value):
+        """Ensure username is unique."""
+        if CustomUser.objects.filter(username=value, is_deleted=False).exists():
+            raise serializers.ValidationError('A user with this username already exists.')
+        return value
 
     def create(self, validated_data):
-        validated_data.pop('confirm_password', None)
-        password = validated_data.pop('password', None)
-
+        """
+        Create user with auto-generated temporary password.
+        
+        Returns user instance with _temp_password_plain attribute
+        (for email sending - NOT stored in database).
+        """
+        from core.utils import generate_temporary_password
+        
+        # Generate secure temporary password (12 chars, alphanumeric + symbols)
+        temp_password = generate_temporary_password()
+        
+        # Create user - create_user() automatically hashes the password
         user = CustomUser.objects.create_user(
-            password=password,
+            password=temp_password,              # ← Hashed & stored securely
+            must_change_password=True,           # ← Force change on first login
+            is_active=True,                      # ← Account is active immediately
             **validated_data
         )
-
+        
+        # Attach plain text password to instance temporarily for email
+        # ⚠️ This is IN-MEMORY ONLY - never saved to database
+        user._temp_password_plain = temp_password
+        
         return user
 
 
