@@ -18,6 +18,11 @@ import {
   selectNotificationError,
   selectUnreadNotifications,
 } from '@/stores/useNotificationStore';
+import {
+  useAuthStore,
+  selectIsAuthenticated,
+  selectIsInitialized,
+} from '@/stores/useAuthStore';
 import { Notification, NotificationSeverity, ApiResponse } from '@/types';
 import { debugLog, errorLog } from '@/lib/utils';
 import {
@@ -66,6 +71,10 @@ export function useNotifications(): UseNotificationsReturn {
   const isLoading    = useNotificationStore(selectIsLoading);
   const error        = useNotificationStore(selectNotificationError);
 
+  // ✅ Guard: only fetch once auth is ready
+  const isInitialized   = useAuthStore(selectIsInitialized);
+  const isAuthenticated = useAuthStore(selectIsAuthenticated);
+
   const {
     markAsRead:          storeMarkAsRead,
     markAllAsRead:       storeMarkAllAsRead,
@@ -110,9 +119,15 @@ export function useNotifications(): UseNotificationsReturn {
     }
   }, [setNotifications, setLoading, setError]);
 
+  // ✅ FIX: Wait for auth to initialize and confirm user is authenticated
+  //    before fetching. Previously this fired immediately on mount, hitting
+  //    the server action before sessionStorage rehydration completed —
+  //    causing a silent 401 and empty notification panel.
   useEffect(() => {
-    loadNotifications();
-  }, [loadNotifications]);
+    if (isInitialized && isAuthenticated) {
+      loadNotifications();
+    }
+  }, [isInitialized, isAuthenticated, loadNotifications]);
 
   // ---------------------------------------------------------------------------
   // Refresh — force re-fetch from API (e.g. after reconnect)
@@ -155,7 +170,6 @@ export function useNotifications(): UseNotificationsReturn {
 
       if (!response.success) {
         errorLog('useNotifications: Mark as read API failed', response.error);
-        // NOTE: Could roll back here if desired
       }
 
       return response;
