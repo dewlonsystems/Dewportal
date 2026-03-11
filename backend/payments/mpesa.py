@@ -215,7 +215,7 @@ class MpesaService:
             'BusinessShortCode': self.shortcode,
             'Password':          password,
             'Timestamp':         timestamp,
-            'TransactionType':   'CustomerPayBillOnline',
+            'TransactionType':   'CustomerBuyGoodsOnline',
             'Amount':            mpesa_amount,          # ✅ always clean integer
             'PartyA':            normalized_phone,      # ✅ always 254XXXXXXXXX
             'PartyB':            self.tillnumber,
