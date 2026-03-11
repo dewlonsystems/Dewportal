@@ -1,7 +1,7 @@
 // =============================================================================
 // DEWPORTAL FRONTEND - PAYSTACK VERIFY PAGE
 // =============================================================================
-// src/app/dashboard/payments/verify/page.tsx
+// src/app/payments/verify/page.tsx
 // =============================================================================
 
 'use client';
@@ -99,7 +99,7 @@ function VerifyContent() {
             No payment reference found in this URL.
           </p>
           <button
-            onClick={() => router.replace('/dashboard/payments')}
+            onClick={() => router.replace('/payments')}
             className="w-full py-3 rounded-xl bg-[#1a3d2b] text-white text-sm font-bold hover:bg-[#1a3d2b]/90 transition-colors"
           >
             Back to Payments
@@ -226,14 +226,14 @@ function VerifyContent() {
           ) : (
             <div className="w-full space-y-2">
               <button
-                onClick={() => router.replace('/dashboard/payments')}
+                onClick={() => router.replace('/payments')}
                 className="w-full py-3 rounded-xl bg-[#1a3d2b] text-white text-sm font-bold hover:bg-[#1a3d2b]/90 transition-colors flex items-center justify-center gap-2"
               >
                 <ArrowLeft className="w-4 h-4" />
                 Back to Payments
               </button>
               <button
-                onClick={() => router.replace('/dashboard/transactions')}
+                onClick={() => router.replace('/transactions')}
                 className="w-full py-3 rounded-xl bg-gray-50 text-gray-600 text-sm font-semibold hover:bg-gray-100 transition-colors"
               >
                 View Transactions
