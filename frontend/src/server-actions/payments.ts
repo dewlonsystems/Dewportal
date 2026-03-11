@@ -111,41 +111,89 @@ export async function verifyPaystackPaymentAction(
   reference: string
 ): Promise<ApiResponse<PaystackVerifyResponse>> {
   try {
+    if (!reference) {
+      return {
+        success: false,
+        error: 'Missing payment reference',
+        data: undefined, // ✅ Fixed: use undefined instead of null
+      };
+    }
+
     debugLog('Verify Paystack payment', { reference });
 
-    const authHeaders = await getAuthHeaders();
+    // ✅ Build URL directly to match backend exactly
+    // Backend: GET /api/v1/payments/paystack/verify/?reference=DPABC123
+    const API_BASE = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '') || 'http://localhost:8000';
+    const url = `${API_BASE}/api/v1/payments/paystack/verify/?reference=${encodeURIComponent(reference)}`;
 
-    const url = buildUrl(PAYMENT_ENDPOINTS.PAYSTACK_VERIFY, { reference });
+    debugLog('Fetching verification URL', { url });
 
-    const response = await apiGet<PaystackVerifyResponse>(url, {
-      headers: authHeaders,
+    // ✅ NO auth headers — endpoint allows unauthenticated access
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(10000), // 10 second timeout
     });
+
+    // Handle 404 explicitly
+    if (response.status === 404) {
+      errorLog('Verification endpoint not found', { url, status: response.status });
+      return {
+        success: false,
+        error: 'Verification service unavailable. Please try again later.',
+        data: undefined, // ✅ Fixed
+      };
+    }
+
+    // Handle other HTTP errors
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      errorLog('Verification API error', { 
+        status: response.status, 
+        url, 
+        error: errorData 
+      });
+      return {
+        success: false,
+        error: errorData.error || `Verification failed with status ${response.status}`,
+        data: undefined, // ✅ Fixed
+      };
+    }
+
+    const data = await response.json();
 
     debugLog('Paystack verification result', {
       reference,
-      status: response.data.status,
-      success: response.data.success,
+      status: data.status,
+      success: data.success,
     });
 
     // Revalidate transactions if payment completed
-    if (response.data.status === 'completed') {
+    if (data.status === 'completed') {
       revalidatePath('/dashboard/transactions');
       revalidatePath('/dashboard/payments');
     }
 
     return {
       success: true,
-      data: response.data,
+      data: {
+        status: data.status,
+        message: data.message,
+        transaction: data.transaction,
+        success: data.success,
+      },
       status: 200,
     };
 
   } catch (error) {
     errorLog('Paystack verification failed', error);
-    const apiError = error as ApiError;
     return {
       success: false,
-      error: apiError.message || 'Payment verification failed',
-      status_code: apiError.status,
+      error: error instanceof Error ? error.message : 'Network error while verifying payment',
+      data: undefined, // ✅ Fixed
     };
   }
 }

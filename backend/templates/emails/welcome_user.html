@@ -1,129 +1,199 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Welcome to Dewlon Portal</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 20px;
-            background-color: #f8f9fa;
-        }
-        .email-container {
-            background: #fff;
-            border-radius: 8px;
-            padding: 30px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        .header {
-            text-align: center;
-            padding-bottom: 20px;
-            border-bottom: 2px solid #007bff;
-            margin-bottom: 25px;
-        }
-        .header h1 {
-            color: #007bff;
-            margin: 0;
-            font-size: 24px;
-        }
-        .credentials {
-            background: #f8f9fa;
-            border-left: 4px solid #007bff;
-            padding: 15px 20px;
-            margin: 20px 0;
-            border-radius: 0 4px 4px 0;
-        }
-        .credentials p {
-            margin: 8px 0;
-            font-size: 14px;
-        }
-        .credentials code {
-            background: #e9ecef;
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-family: monospace;
-            font-weight: 600;
-            color: #d63384;
-        }
-        .warning {
-            background: #fff3cd;
-            border: 1px solid #ffc107;
-            border-radius: 4px;
-            padding: 15px;
-            margin: 20px 0;
-        }
-        .warning strong {
-            color: #856404;
-        }
-        .footer {
-            text-align: center;
-            padding-top: 25px;
-            border-top: 1px solid #dee2e6;
-            color: #6c757d;
-            font-size: 12px;
-        }
-        .btn {
-            display: inline-block;
-            background: #007bff;
-            color: #fff !important;
-            text-decoration: none;
-            padding: 12px 30px;
-            border-radius: 5px;
-            font-weight: 600;
-            margin: 15px 0;
-        }
-        .btn:hover {
-            background: #0056b3;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Welcome to Dewlon Portal</title>
 </head>
-<body>
-    <div class="email-container">
-        <div class="header">
-            <h1>🎉 Welcome to Dewlon Portal</h1>
-        </div>
-        
-        <p>Hello <strong>{{ user.first_name|default:user.username }}</strong>,</p>
-        
-        <p>Your account has been successfully created by an administrator. You can now access the Dewlon Portal using the credentials below.</p>
-        
-        <div class="credentials">
-            <p><strong>🔐 Your Login Credentials:</strong></p>
-            <p>👤 Username: <code>{{ user.username }}</code></p>
-            <p>🔑 Temporary Password: <code>{{ temp_password }}</code></p>
-        </div>
-        
-        <div style="text-align: center;">
-            <a href="{{ login_url }}" class="btn">🚀 Login to Dewlon Portal</a>
-        </div>
-        
-        <div class="warning">
-            <p><strong>⚠️ Important Security Notice:</strong></p>
-            <p style="margin: 10px 0 0 0;">
-                You <strong>must</strong> change your password immediately after your first login. 
-                This temporary password will not work after you've set your new password.
-            </p>
-        </div>
-        
-        <p><strong>Next Steps:</strong></p>
-        <ol>
-            <li>Click the login button above or visit: <a href="{{ login_url }}">{{ login_url }}</a></li>
-            <li>Enter your username and temporary password</li>
-            <li>Follow the prompts to create your new secure password</li>
-            <li>Start using Dewlon Portal! 🎯</li>
-        </ol>
-        
-        <p>If you did not request this account or believe this was sent in error, please contact our support team immediately at <a href="mailto:support@yourdomain.com">support@yourdomain.com</a>.</p>
-        
-        <div class="footer">
-            <p>© {% now "Y" %} Dewlon Portal. All rights reserved.</p>
-            <p>This is an automated message. Please do not reply to this email.</p>
-        </div>
-    </div>
-</body>
-</html>
+<body style="margin:0;padding:0;background-color:#f0f4f0;font-family:'Georgia',serif;">
+
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f0f4f0;padding:48px 16px;">
+    <tr>
+      <td align="center">
+
+        <!-- Outer card -->
+        <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:4px;overflow:hidden;box-shadow:0 2px 24px rgba(0,0,0,0.08);">
+
+          <!-- TOP ACCENT BAR -->
+          <tr>
+            <td style="height:4px;background:linear-gradient(90deg,#14532d 0%,#16a34a 50%,#f97316 100%);font-size:0;line-height:0;">&nbsp;</td>
+          </tr>
+
+          <!-- HEADER -->
+          <tr>
+            <td style="background:#0f2e10;padding:44px 52px 40px;">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td>
+                    <table cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td style="width:44px;height:44px;text-align:center;vertical-align:middle;">
+                          <img src="data:image/png;base64,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" width="44" height="44" alt="Dewlon Portal" style="display:block;border-radius:50%;" />
+                        </td>
+                        <td style="padding-left:14px;vertical-align:middle;">
+                          <span style="font-family:Arial,sans-serif;font-size:20px;font-weight:700;color:#ffffff;letter-spacing:-0.5px;">Dewlon <span style="color:#f97316;">Portal</span></span>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                  <td align="right" valign="middle">
+                    <span style="font-family:Arial,sans-serif;font-size:10px;font-weight:600;letter-spacing:0.15em;text-transform:uppercase;color:rgba(255,255,255,0.35);">Account Notice</span>
+                  </td>
+                </tr>
+              </table>
+
+              <div style="height:1px;background:rgba(255,255,255,0.08);margin:28px 0;"></div>
+
+              <p style="font-family:Arial,sans-serif;font-size:11px;font-weight:600;letter-spacing:0.18em;text-transform:uppercase;color:#4ade80;margin:0 0 14px 0;">New Account Created</p>
+              <h1 style="font-family:Georgia,serif;font-size:32px;font-weight:400;color:#ffffff;margin:0;line-height:1.25;letter-spacing:-0.5px;">
+                Welcome to<br>
+                <em style="color:#f97316;">Dewlon Portal</em>
+              </h1>
+              <p style="font-family:Arial,sans-serif;font-size:14px;font-weight:300;color:rgba(255,255,255,0.5);margin:16px 0 0;line-height:1.6;">
+                Your account has been set up and is ready for first-time access.
+              </p>
+            </td>
+          </tr>
+
+          <!-- BODY -->
+          <tr>
+            <td style="padding:44px 52px 0;">
+
+              <p style="font-family:Georgia,serif;font-size:16px;color:#1a2e1a;line-height:1.8;margin:0 0 16px;">
+                Dear <strong>{{ user.first_name|default:user.username }}</strong>,
+              </p>
+
+              <p style="font-family:Arial,sans-serif;font-size:14px;color:#4a5e4a;line-height:1.8;margin:0 0 36px;">
+                An administrator has created a new account on your behalf on the Dewlon Portal platform. Please find your temporary access credentials below. You are required to update your password upon first login.
+              </p>
+
+              <!-- Credentials block -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:36px;">
+                <tr>
+                  <td style="background:#f8faf8;border:1px solid #d4e8d4;border-radius:4px;padding:32px 36px;">
+                    <p style="font-family:Arial,sans-serif;font-size:10px;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;color:#16a34a;margin:0 0 24px;">Access Credentials</p>
+
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:0;">
+                      <tr>
+                        <td style="font-family:Arial,sans-serif;font-size:12px;color:#7a8e7a;font-weight:500;letter-spacing:0.04em;text-transform:uppercase;width:140px;padding:13px 0;border-bottom:1px solid #e4ede4;vertical-align:middle;">Username</td>
+                        <td style="padding:13px 0;border-bottom:1px solid #e4ede4;vertical-align:middle;">
+                          <span style="font-family:'Courier New',monospace;font-size:15px;font-weight:700;color:#0f2e10;background:#e8f5e8;border:1px solid #c6e2c6;border-radius:3px;padding:5px 14px;display:inline-block;">{{ user.username }}</span>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="font-family:Arial,sans-serif;font-size:12px;color:#7a8e7a;font-weight:500;letter-spacing:0.04em;text-transform:uppercase;width:140px;padding:13px 0;vertical-align:middle;">Temp. Password</td>
+                        <td style="padding:13px 0;vertical-align:middle;">
+                          <span style="font-family:'Courier New',monospace;font-size:15px;font-weight:700;color:#9a3412;background:#fff7ed;border:1px solid #fed7aa;border-radius:3px;padding:5px 14px;display:inline-block;">{{ temp_password }}</span>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- CTA -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:36px;">
+                <tr>
+                  <td align="center">
+                    <a href="{{ login_url }}" style="display:inline-block;font-family:Arial,sans-serif;font-size:13px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;text-decoration:none;color:#ffffff;background:#16a34a;padding:16px 52px;border-radius:3px;">
+                      Access Your Account &rarr;
+                    </a>
+                  </td>
+                </tr>
+                <tr>
+                  <td align="center" style="padding-top:14px;">
+                    <span style="font-family:Arial,sans-serif;font-size:12px;color:#8a9e8a;">or copy this link: </span>
+                    <a href="{{ login_url }}" style="font-family:Arial,sans-serif;font-size:12px;color:#16a34a;text-decoration:none;">{{ login_url }}</a>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Warning -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:36px;">
+                <tr>
+                  <td style="border-left:3px solid #f97316;background:#fffaf5;padding:20px 24px;border-radius:0 3px 3px 0;">
+                    <p style="font-family:Arial,sans-serif;font-size:11px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;color:#c2410c;margin:0 0 8px;">Important Security Notice</p>
+                    <p style="font-family:Arial,sans-serif;font-size:13px;color:#78350f;line-height:1.7;margin:0;">
+                      You are required to change your password immediately after your first login. Your temporary password will be invalidated once a new password has been set. Do not share your credentials with anyone.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Steps -->
+              <p style="font-family:Arial,sans-serif;font-size:10px;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;color:#16a34a;margin:0 0 20px;">First Login Steps</p>
+
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:40px;">
+                <tr>
+                  <td style="padding:13px 0;border-bottom:1px solid #edf3ed;vertical-align:middle;">
+                    <table cellpadding="0" cellspacing="0" border="0"><tr>
+                      <td style="width:28px;height:28px;background:#e8f5e8;border:1px solid #c6e2c6;border-radius:3px;text-align:center;vertical-align:middle;font-family:Arial,sans-serif;font-size:12px;font-weight:700;color:#16a34a;">1</td>
+                      <td style="padding-left:16px;font-family:Arial,sans-serif;font-size:14px;color:#4a5e4a;line-height:1.6;vertical-align:middle;">Visit the portal login page and enter your credentials above.</td>
+                    </tr></table>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:13px 0;border-bottom:1px solid #edf3ed;vertical-align:middle;">
+                    <table cellpadding="0" cellspacing="0" border="0"><tr>
+                      <td style="width:28px;height:28px;background:#e8f5e8;border:1px solid #c6e2c6;border-radius:3px;text-align:center;vertical-align:middle;font-family:Arial,sans-serif;font-size:12px;font-weight:700;color:#16a34a;">2</td>
+                      <td style="padding-left:16px;font-family:Arial,sans-serif;font-size:14px;color:#4a5e4a;line-height:1.6;vertical-align:middle;">Follow the prompt to create a new secure password.</td>
+                    </tr></table>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:13px 0;border-bottom:1px solid #edf3ed;vertical-align:middle;">
+                    <table cellpadding="0" cellspacing="0" border="0"><tr>
+                      <td style="width:28px;height:28px;background:#e8f5e8;border:1px solid #c6e2c6;border-radius:3px;text-align:center;vertical-align:middle;font-family:Arial,sans-serif;font-size:12px;font-weight:700;color:#16a34a;">3</td>
+                      <td style="padding-left:16px;font-family:Arial,sans-serif;font-size:14px;color:#4a5e4a;line-height:1.6;vertical-align:middle;">Complete your profile and begin using the platform.</td>
+                    </tr></table>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:13px 0;vertical-align:middle;">
+                    <table cellpadding="0" cellspacing="0" border="0"><tr>
+                      <td style="width:28px;height:28px;background:#e8f5e8;border:1px solid #c6e2c6;border-radius:3px;text-align:center;vertical-align:middle;font-family:Arial,sans-serif;font-size:12px;font-weight:700;color:#16a34a;">4</td>
+                      <td style="padding-left:16px;font-family:Arial,sans-serif;font-size:14px;color:#4a5e4a;line-height:1.6;vertical-align:middle;">Contact support if you experience any difficulty accessing your account.</td>
+                    </tr></table>
+                  </td>
+                </tr>
+              </table>
+
+              <div style="height:1px;background:#e4ede4;margin-bottom:28px;"></div>
+
+              <p style="font-family:Arial,sans-serif;font-size:13px;color:#8a9e8a;line-height:1.7;margin:0 0 44px;">
+                If you did not request this account or believe this message was sent in error, please contact our team immediately at
+                <a href="/cdn-cgi/l/email-protection#a5d6d0d5d5cad7d1e5c1c0d2c9cacbd68bc6cac8" style="color:#16a34a;text-decoration:none;font-weight:600;"><span class="__cf_email__" data-cfemail="a2d1d7d2d2cdd0d6e2c6c7d5cecdccd18cc1cdcf">[email&#160;protected]</span></a>.
+              </p>
+
+            </td>
+          </tr>
+
+          <!-- FOOTER -->
+          <tr>
+            <td style="background:#f8faf8;border-top:1px solid #e4ede4;padding:28px 52px;">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td valign="middle">
+                    <span style="font-family:Arial,sans-serif;font-size:14px;font-weight:700;color:#0f2e10;letter-spacing:-0.3px;">Dewlon <span style="color:#f97316;">Portal</span></span>
+                  </td>
+                  <td align="right" valign="middle">
+                    <span style="font-family:Arial,sans-serif;font-size:11px;color:#a0b0a0;line-height:1.7;display:block;text-align:right;">
+                      &copy; {% now "Y" %} Dewlon Portal. All rights reserved.<br>
+                      This is an automated message. Please do not reply.
+                    </span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- BOTTOM ACCENT BAR -->
+          <tr>
+            <td style="height:3px;background:linear-gradient(90deg,#14532d 0%,#16a34a 50%,#f97316 100%);font-size:0;line-height:0;">&nbsp;</td>
+          </tr>
+
+        </table>
+
+        <!-- Below card -->
+        <p style="font-family:Arial,sans-serif;font-size:11px;color:#9aaa9a;text-align:center;margin-top:24px;line-height:1.7;">
+          This email was sent because an account was created on your behal

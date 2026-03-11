@@ -310,11 +310,15 @@ class InitiatePaymentView(APIView):
 
 class PaystackVerifyView(APIView):
     """
-    GET /api/payments/paystack/verify/?reference=DP...
+    GET /api/v1/payments/paystack/verify/?reference=DP...
     Called by the frontend verify page after Paystack redirects the user back.
-    We verify with Paystack's API and update the transaction if needed.
+    
+    🔐 SECURITY: 
+    - Allows unauthenticated access (user may not be logged in after Paystack redirect)
+    - Validates ownership ONLY if user is authenticated
+    - Returns minimal data for unauthenticated requests
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]  # ✅ Changed from IsAuthenticated
 
     def get(self, request):
         reference = request.query_params.get('reference')
@@ -329,17 +333,35 @@ class PaystackVerifyView(APIView):
             return Response({'error': 'Transaction not found'},
                             status=status.HTTP_404_NOT_FOUND)
 
-        # ── Ownership check ───────────────────────────────────────────────────
-        if request.user.role != 'admin' and transaction.user != request.user:
-            return Response({'error': 'Permission denied'},
-                            status=status.HTTP_403_FORBIDDEN)
+        # ── Ownership check (ONLY if user is authenticated) ────────────────────
+        if request.user.is_authenticated:
+            if request.user.role != 'admin' and transaction.user != request.user:
+                logger.warning(
+                    f"Unauthorized access attempt to transaction {reference} | "
+                    f"User: {request.user.username} | IP: {request.META.get('REMOTE_ADDR')}"
+                )
+                return Response({'error': 'Permission denied'},
+                                status=status.HTTP_403_FORBIDDEN)
 
         # ── Already resolved — return immediately ─────────────────────────────
         if transaction.status in ('completed', 'failed', 'cancelled'):
+            # Return full data if authenticated, minimal if not
+            if request.user.is_authenticated:
+                transaction_data = TransactionSerializer(transaction).data
+            else:
+                # 🔒 Minimal data for unauthenticated requests (security)
+                transaction_data = {
+                    'reference': transaction.reference,
+                    'status': transaction.status,
+                    'amount': str(transaction.amount),
+                    'payment_method': transaction.payment_method,
+                    'created_at': transaction.created_at.isoformat(),
+                }
+            
             return Response({
                 'success': transaction.status == 'completed',
                 'status':  transaction.status,
-                'transaction': TransactionSerializer(transaction).data,
+                'transaction': transaction_data,
             })
 
         # ── Ask Paystack ───────────────────────────────────────────────────────
@@ -355,7 +377,10 @@ class PaystackVerifyView(APIView):
                 'success': False,
                 'status': 'pending',
                 'message': result.get('error', 'Verification failed — transaction may still be processing'),
-                'transaction': TransactionSerializer(transaction).data,
+                'transaction': {
+                    'reference': transaction.reference,
+                    'status': transaction.status,
+                } if not request.user.is_authenticated else TransactionSerializer(transaction).data,
             })
 
         paystack_status = result.get('status')   # 'success', 'failed', 'abandoned'
@@ -370,20 +395,27 @@ class PaystackVerifyView(APIView):
                         provider_reference=reference,
                     )
                     _notify_payment_update(transaction)
-                    _create_audit_log(
-                        user=request.user,
-                        action_type='transaction_completed',
-                        description=f"Paystack payment verified & completed: {reference}",
-                        transaction=transaction,
-                        request=request,
-                    )
+                    
+                    # Only log audit if user is authenticated
+                    if request.user.is_authenticated:
+                        _create_audit_log(
+                            user=request.user,
+                            action_type='transaction_completed',
+                            description=f"Paystack payment verified & completed: {reference}",
+                            transaction=transaction,
+                            request=request,
+                        )
                 except ValueError as e:
                     logger.warning(f"Status transition error [{reference}]: {str(e)}")
 
             return Response({
                 'success': True,
                 'status': 'completed',
-                'transaction': TransactionSerializer(transaction).data,
+                'transaction': TransactionSerializer(transaction).data if request.user.is_authenticated else {
+                    'reference': transaction.reference,
+                    'status': 'completed',
+                    'amount': str(transaction.amount),
+                },
             })
 
         elif paystack_status in ('failed', 'abandoned'):
@@ -398,7 +430,10 @@ class PaystackVerifyView(APIView):
                 'success': False,
                 'status': 'failed',
                 'message': f'Payment {paystack_status} on Paystack',
-                'transaction': TransactionSerializer(transaction).data,
+                'transaction': TransactionSerializer(transaction).data if request.user.is_authenticated else {
+                    'reference': transaction.reference,
+                    'status': 'failed',
+                },
             })
 
         # pending / processing
@@ -406,7 +441,10 @@ class PaystackVerifyView(APIView):
             'success': False,
             'status': 'pending',
             'message': 'Payment is still being processed',
-            'transaction': TransactionSerializer(transaction).data,
+            'transaction': {
+                'reference': transaction.reference,
+                'status': 'pending',
+            } if not request.user.is_authenticated else TransactionSerializer(transaction).data,
         })
 
 

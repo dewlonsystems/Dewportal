@@ -472,7 +472,7 @@ class UserActionView(APIView):
             temp_password = generate_temporary_password()
             user.set_password(temp_password)
             user.must_change_password = True  # Force change on first login after reset
-            user.save(update_fields=['must_change_password'])
+            user.save(update_fields=['password', 'must_change_password'])
 
             # ─────────────────────────────────────────────────────────────────
             # Send password reset email with HTML template
@@ -512,9 +512,9 @@ class UserActionView(APIView):
                     html_message=html_message,
                     fail_silently=False,
                 )
-                logger.info(f"✅ Password reset email (HTML) sent to {user.email}")
+                logger.info(f"Password reset email (HTML) sent to {user.email}")
             except Exception as e:
-                logger.error(f"❌ Failed to send password reset email to {user.email}: {str(e)}")
+                logger.error(f"Failed to send password reset email to {user.email}: {str(e)}")
 
             message = f"Password reset for {user.username}. Temporary password sent via email."
 
