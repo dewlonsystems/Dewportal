@@ -380,7 +380,7 @@ export async function exportTransactionsPdfAction(filters?: {
 
     const headers = await getFileDownloadHeaders();
 
-    const params = new URLSearchParams({ format: 'pdf' });
+    const params = new URLSearchParams({ export_format: 'pdf' });   
     if (filters?.status)         params.set('status',         filters.status);
     if (filters?.payment_method) params.set('payment_method', filters.payment_method);
     if (filters?.date_from)      params.set('date_from',      filters.date_from);
@@ -445,7 +445,7 @@ export async function exportTransactionsExcelAction(filters?: {
 
     const headers = await getFileDownloadHeaders();
 
-    const params = new URLSearchParams({ format: 'excel' });
+    const params = new URLSearchParams({ export_format: 'excel' }); 
     if (filters?.status)         params.set('status',         filters.status);
     if (filters?.payment_method) params.set('payment_method', filters.payment_method);
     if (filters?.date_from)      params.set('date_from',      filters.date_from);
