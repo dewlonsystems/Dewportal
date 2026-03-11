@@ -29,7 +29,6 @@ function timeAgo(dateStr: string): string {
   return `${days}d ago`;
 }
 
-
 type SeverityConfig = {
   dot: string;
   bg: string;
@@ -220,17 +219,18 @@ export function Header({ onMenuToggle, isMobileMenuOpen }: HeaderProps) {
     notifications,
     unreadCount,
     markAsRead,
+    markAsUnread,   // ✅ now a real function from the hook
     markAllAsRead,
     dismiss,
   } = useNotifications();
 
-  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
-  const [isNotifOpen, setIsNotifOpen] = useState(false);
-  const [isBouncing, setIsBouncing] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<'all' | 'unread'>('all');
+  const [isUserMenuOpen, setIsUserMenuOpen]   = useState(false);
+  const [isNotifOpen, setIsNotifOpen]         = useState(false);
+  const [isBouncing, setIsBouncing]           = useState(false);
+  const [activeFilter, setActiveFilter]       = useState<'all' | 'unread'>('all');
 
   const userMenuRef = useRef<HTMLDivElement>(null);
-  const notifRef = useRef<HTMLDivElement>(null);
+  const notifRef    = useRef<HTMLDivElement>(null);
   const prevUnreadCount = useRef(unreadCount);
 
   // Bounce bell when new notification arrives
@@ -263,20 +263,19 @@ export function Header({ onMenuToggle, isMobileMenuOpen }: HeaderProps) {
     await logoutAction();
   };
 
+  // ✅ FIXED: calls markAsRead (correct)
   const handleMarkAsRead = useCallback(async (id: number) => {
     await markAsRead(id);
   }, [markAsRead]);
 
-  // Mark as unread — toggle is_read locally via store
-  // We call markAsRead with a flag trick; if your store supports it
-  // otherwise we just call dismiss for now and you can wire it to backend
+  // ✅ FIXED: now calls markAsUnread (correct) — was calling markAsRead before
   const handleMarkAsUnread = useCallback(async (id: number) => {
-    // For now optimistically toggle — wire to backend when endpoint is ready
-    await markAsRead(id); // replace with markAsUnread when available
-  }, [markAsRead]);
+    await markAsUnread(id);
+  }, [markAsUnread]);
 
-  const handleDismiss = useCallback((id: number) => {
-    dismiss(id);
+  // ✅ FIXED: dismiss is now async and hits the backend
+  const handleDismiss = useCallback(async (id: number) => {
+    await dismiss(id);
   }, [dismiss]);
 
   const visibleNotifications = notifications.filter((n) => {
@@ -298,7 +297,6 @@ export function Header({ onMenuToggle, isMobileMenuOpen }: HeaderProps) {
 
   return (
     <>
-      {/* Bounce keyframes injected once */}
       <style>{`
         @keyframes bellBounce {
           0%, 100% { transform: rotate(0deg); }
@@ -317,7 +315,6 @@ export function Header({ onMenuToggle, isMobileMenuOpen }: HeaderProps) {
 
           {/* ── Left ───────────────────────────────────────────────── */}
           <div className="flex items-center gap-3">
-            {/* Animated hamburger — mobile only */}
             <button
               onClick={onMenuToggle}
               className={cn(
@@ -331,7 +328,6 @@ export function Header({ onMenuToggle, isMobileMenuOpen }: HeaderProps) {
               <span className={cn('block w-5 h-0.5 bg-gray-600 rounded-full transition-all duration-200', isMobileMenuOpen && '-translate-y-2 -rotate-45')} />
             </button>
 
-            {/* Brand dot — desktop only */}
             <div className="hidden lg:flex items-center gap-2">
               <div className="w-1.5 h-1.5 rounded-full bg-[#c45c1a]" />
               <span className="text-sm font-medium text-gray-400">Dewlon Portal</span>
@@ -363,7 +359,6 @@ export function Header({ onMenuToggle, isMobileMenuOpen }: HeaderProps) {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                 </svg>
 
-                {/* Unread badge */}
                 {unreadCount > 0 && (
                   <span
                     className={cn(
@@ -379,7 +374,6 @@ export function Header({ onMenuToggle, isMobileMenuOpen }: HeaderProps) {
               {/* ── Notification panel ─────────────────────────── */}
               {isNotifOpen && (
                 <div className="absolute right-0 top-full mt-2 w-[380px] max-w-[calc(100vw-1rem)] bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50">
-                  {/* Panel header */}
                   <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                     <div className="flex items-center gap-2">
                       <h3 className="text-sm font-semibold text-gray-900">Notifications</h3>
@@ -453,7 +447,6 @@ export function Header({ onMenuToggle, isMobileMenuOpen }: HeaderProps) {
                     )}
                   </div>
 
-                  {/* Panel footer */}
                   {visibleNotifications.length > 0 && (
                     <div className="px-4 py-2.5 border-t border-gray-100 bg-gray-50/50">
                       <p className="text-[11px] text-center text-gray-400">
@@ -495,7 +488,6 @@ export function Header({ onMenuToggle, isMobileMenuOpen }: HeaderProps) {
                 </svg>
               </button>
 
-              {/* User dropdown */}
               {isUserMenuOpen && (
                 <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden z-50">
                   <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/50">
