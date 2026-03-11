@@ -55,13 +55,17 @@ export const USER_ENDPOINTS = {
 // -----------------------------------------------------------------------------
 
 export const PAYMENT_ENDPOINTS = {
-  INITIATE: `${API_PREFIX}/payments/initiate/`,
-  TRANSACTIONS_LIST: `${API_PREFIX}/payments/transactions/`,
+  INITIATE:            `${API_PREFIX}/payments/initiate/`,
+  TRANSACTIONS_LIST:   `${API_PREFIX}/payments/transactions/`,
   TRANSACTIONS_DETAIL: (id: number) => `${API_PREFIX}/payments/transactions/${id}/`,
-  SUMMARY: `${API_PREFIX}/payments/summary/`,
-  PAYSTACK_VERIFY: `${API_PREFIX}/payments/paystack/verify/`,
-  MPESA_CALLBACK: `${API_PREFIX}/payments/callbacks/mpesa/`,
-  PAYSTACK_WEBHOOK: `${API_PREFIX}/payments/webhooks/paystack/`,
+  SUMMARY:             `${API_PREFIX}/payments/summary/`,
+  PAYSTACK_VERIFY:     `${API_PREFIX}/payments/paystack/verify/`,
+  MPESA_CALLBACK:      `${API_PREFIX}/payments/callbacks/mpesa/`,
+  PAYSTACK_WEBHOOK:    `${API_PREFIX}/payments/webhooks/paystack/`,
+
+  // Receipt & Export
+  TRANSACTION_RECEIPT: (id: number) => `${API_PREFIX}/payments/transactions/${id}/receipt/`,
+  EXPORT:              `${API_PREFIX}/payments/export/`,
 } as const;
 
 // -----------------------------------------------------------------------------
@@ -69,10 +73,10 @@ export const PAYMENT_ENDPOINTS = {
 // -----------------------------------------------------------------------------
 
 export const LEDGER_ENDPOINTS = {
-  ENTRIES_LIST: `${API_PREFIX}/ledger/entries/`,
-  ENTRIES_DETAIL: (id: number) => `${API_PREFIX}/ledger/entries/${id}/`,
-  BALANCE: `${API_PREFIX}/ledger/balance/`,
-  EXPORT: `${API_PREFIX}/ledger/export/`,
+  ENTRIES_LIST:    `${API_PREFIX}/ledger/entries/`,
+  ENTRIES_DETAIL:  (id: number) => `${API_PREFIX}/ledger/entries/${id}/`,
+  BALANCE:         `${API_PREFIX}/ledger/balance/`,
+  EXPORT:          `${API_PREFIX}/ledger/export/`,
   INTEGRITY_CHECK: `${API_PREFIX}/ledger/integrity-check/`,
 } as const;
 
@@ -81,11 +85,11 @@ export const LEDGER_ENDPOINTS = {
 // -----------------------------------------------------------------------------
 
 export const AUDIT_ENDPOINTS = {
-  LOGS_LIST: `${API_PREFIX}/logs/logs/`,
-  LOGS_DETAIL: (id: number) => `${API_PREFIX}/logs/logs/${id}/`,
-  SUMMARY: `${API_PREFIX}/logs/summary/`,
-  USERS_LAST_SEEN: `${API_PREFIX}/logs/users/last-seen/`,
-  SESSIONS: `${API_PREFIX}/logs/sessions/`,
+  LOGS_LIST:      `${API_PREFIX}/logs/logs/`,
+  LOGS_DETAIL:    (id: number) => `${API_PREFIX}/logs/logs/${id}/`,
+  SUMMARY:        `${API_PREFIX}/logs/summary/`,
+  USERS_LAST_SEEN:`${API_PREFIX}/logs/users/last-seen/`,
+  SESSIONS:       `${API_PREFIX}/logs/sessions/`,
 } as const;
 
 // -----------------------------------------------------------------------------
@@ -93,14 +97,14 @@ export const AUDIT_ENDPOINTS = {
 // -----------------------------------------------------------------------------
 
 export const NOTIFICATION_ENDPOINTS = {
-  LIST: `${API_PREFIX}/events/`,
-  DETAIL: (id: number) => `${API_PREFIX}/events/${id}/`,
-  MARK_READ: `${API_PREFIX}/events/mark-read/`,
-  MARK_ALL_READ: `${API_PREFIX}/events/mark-all-read/`,
-  BULK_UPDATE: `${API_PREFIX}/events/bulk-update/`,
-  SUMMARY: `${API_PREFIX}/events/summary/`,
+  LIST:                  `${API_PREFIX}/events/`,
+  DETAIL:                (id: number) => `${API_PREFIX}/events/${id}/`,
+  MARK_READ:             `${API_PREFIX}/events/mark-read/`,
+  MARK_ALL_READ:         `${API_PREFIX}/events/mark-all-read/`,
+  BULK_UPDATE:           `${API_PREFIX}/events/bulk-update/`,
+  SUMMARY:               `${API_PREFIX}/events/summary/`,
   WEBSOCKET_CONNECTIONS: `${API_PREFIX}/events/websocket-connections/`,
-  WEBSOCKET_TERMINATE: (id: number) =>
+  WEBSOCKET_TERMINATE:   (id: number) =>
     `${API_PREFIX}/events/websocket-connections/${id}/terminate/`,
 } as const;
 
@@ -110,7 +114,7 @@ export const NOTIFICATION_ENDPOINTS = {
 
 export const DASHBOARD_ENDPOINTS = {
   DASHBOARD: `${API_PREFIX}/system/dashboard/`,
-  HEALTH: `${API_PREFIX}/system/health/`,
+  HEALTH:    `${API_PREFIX}/system/health/`,
 } as const;
 
 // -----------------------------------------------------------------------------
@@ -128,7 +132,7 @@ export const WS_ENDPOINTS = {
 
 export const HEALTH_ENDPOINTS = {
   API_HEALTH: '/api/health/',
-  WS_HEALTH: WS_ENDPOINTS.HEALTH,
+  WS_HEALTH:  WS_ENDPOINTS.HEALTH,
 } as const;
 
 // -----------------------------------------------------------------------------
@@ -174,7 +178,7 @@ export function buildPaginationParams(
   pageSize?: number
 ): Record<string, string | number | null> {
   return {
-    ...(page     !== undefined ? { page }           : {}),
+    ...(page     !== undefined ? { page }                : {}),
     ...(pageSize !== undefined ? { page_size: pageSize } : {}),
   };
 }

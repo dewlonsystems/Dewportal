@@ -4,9 +4,15 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useTransactions } from '@/hooks/useTransactions';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { downloadPdf, downloadExcel } from '@/lib/utils/download';
+import {
+  downloadReceiptAction,
+  exportTransactionsPdfAction,
+  exportTransactionsExcelAction,
+} from '@/server-actions/payments';
 import { Transaction, TransactionStatus, PaymentMethod } from '@/types';
 
 // -----------------------------------------------------------------------------
@@ -72,10 +78,38 @@ function StatCard({ label, value, sub, accent }: { label: string; value: string 
 }
 
 // -----------------------------------------------------------------------------
+// Toast — lightweight inline feedback
+// -----------------------------------------------------------------------------
+
+function Toast({ message, type, onDismiss }: { message: string; type: 'error' | 'success'; onDismiss: () => void }) {
+  return (
+    <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl text-sm font-semibold max-w-sm w-[90vw] ${
+      type === 'error' ? 'bg-red-600 text-white' : 'bg-[#0f2e10] text-white'
+    }`}>
+      {type === 'error'
+        ? <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+        : <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+      }
+      <span className="flex-1">{message}</span>
+      <button onClick={onDismiss} className="opacity-70 hover:opacity-100 transition-opacity ml-1">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+      </button>
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------------
 // Transaction Detail Modal — mobile-safe
 // -----------------------------------------------------------------------------
 
-function TransactionModal({ tx, onClose, onPrint }: { tx: Transaction; onClose: () => void; onPrint: () => void }) {
+function TransactionModal({
+  tx, onClose, onDownloadReceipt, isDownloading,
+}: {
+  tx: Transaction;
+  onClose: () => void;
+  onDownloadReceipt: () => void;
+  isDownloading: boolean;
+}) {
   const user = tx.user_details;
   const receipt = tx.mpesa_receipt_number || tx.provider_reference || '—';
 
@@ -92,20 +126,17 @@ function TransactionModal({ tx, onClose, onPrint }: { tx: Transaction; onClose: 
     ...(user ? [['Account', <span className="text-xs text-gray-700 break-all">{user.first_name} {user.last_name}<br/><span className="text-gray-400">{user.email}</span></span>] as [string, React.ReactNode]] : []),
   ];
 
+  const canDownload = tx.status !== 'pending';
+
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-      {/* Backdrop */}
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-
-      {/* Modal — slides up from bottom on mobile, centered on desktop */}
       <div className="relative bg-white w-full sm:max-w-lg sm:mx-4 sm:rounded-2xl rounded-t-2xl shadow-2xl overflow-hidden max-h-[92dvh] flex flex-col">
 
-        {/* Drag handle (mobile) */}
         <div className="flex justify-center pt-3 pb-1 sm:hidden">
           <div className="w-10 h-1 rounded-full bg-gray-200" />
         </div>
 
-        {/* Header */}
         <div className="bg-[#0f2e10] px-5 py-4 flex-shrink-0">
           <div className="flex items-center justify-between">
             <div>
@@ -123,10 +154,8 @@ function TransactionModal({ tx, onClose, onPrint }: { tx: Transaction; onClose: 
           </div>
         </div>
 
-        {/* Accent bar */}
         <div className="h-[3px] bg-gradient-to-r from-[#14532d] via-[#16a34a] to-[#f97316] flex-shrink-0" />
 
-        {/* Scrollable body */}
         <div className="overflow-y-auto flex-1 px-5 py-4">
           <div className="divide-y divide-gray-50">
             {rows.map(([label, value]) => (
@@ -138,16 +167,21 @@ function TransactionModal({ tx, onClose, onPrint }: { tx: Transaction; onClose: 
           </div>
         </div>
 
-        {/* Footer */}
         <div className="px-5 pb-6 pt-3 flex gap-3 border-t border-gray-50 flex-shrink-0">
           <button
-            onClick={onPrint}
-            className="flex-1 flex items-center justify-center gap-2 bg-[#0f2e10] hover:bg-[#1a4a1a] text-white text-sm font-semibold py-3 rounded-xl transition-colors"
+            onClick={onDownloadReceipt}
+            disabled={isDownloading || !canDownload}
+            className="flex-1 flex items-center justify-center gap-2 bg-[#0f2e10] hover:bg-[#1a4a1a] disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold py-3 rounded-xl transition-colors"
+            title={!canDownload ? 'Receipt not available for pending transactions' : undefined}
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-            </svg>
-            Print Receipt
+            {isDownloading ? (
+              <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            ) : (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+            )}
+            {isDownloading ? 'Downloading...' : 'Download Receipt'}
           </button>
           <button
             onClick={onClose}
@@ -165,10 +199,16 @@ function TransactionModal({ tx, onClose, onPrint }: { tx: Transaction; onClose: 
 // Export Modal
 // -----------------------------------------------------------------------------
 
-function ExportModal({ onClose, onExport }: { onClose: () => void; onExport: (type: 'excel' | 'pdf') => void }) {
+function ExportModal({
+  onClose, onExport, isExporting,
+}: {
+  onClose: () => void;
+  onExport: (type: 'excel' | 'pdf') => void;
+  isExporting: boolean;
+}) {
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={!isExporting ? onClose : undefined} />
       <div className="relative bg-white w-full sm:max-w-sm sm:mx-4 sm:rounded-2xl rounded-t-2xl shadow-2xl overflow-hidden">
 
         <div className="flex justify-center pt-3 pb-1 sm:hidden">
@@ -180,23 +220,29 @@ function ExportModal({ onClose, onExport }: { onClose: () => void; onExport: (ty
             <p className="text-[10px] font-semibold text-emerald-400 uppercase tracking-widest mb-0.5">Export</p>
             <p className="text-white font-bold text-lg">Choose Format</p>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+          {!isExporting && (
+            <button onClick={onClose} className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
         </div>
         <div className="h-[3px] bg-gradient-to-r from-[#14532d] via-[#16a34a] to-[#f97316]" />
 
         <div className="p-5 space-y-3">
           <button
-            onClick={() => { onExport('excel'); onClose(); }}
-            className="w-full flex items-center gap-4 p-4 rounded-xl border-2 border-emerald-100 hover:border-emerald-300 hover:bg-emerald-50 active:bg-emerald-100 transition-all group"
+            onClick={() => onExport('excel')}
+            disabled={isExporting}
+            className="w-full flex items-center gap-4 p-4 rounded-xl border-2 border-emerald-100 hover:border-emerald-300 hover:bg-emerald-50 active:bg-emerald-100 disabled:opacity-60 disabled:cursor-not-allowed transition-all group"
           >
             <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center flex-shrink-0">
-              <svg className="w-5 h-5 text-emerald-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
+              {isExporting
+                ? <span className="w-5 h-5 border-2 border-emerald-300 border-t-emerald-700 rounded-full animate-spin" />
+                : <svg className="w-5 h-5 text-emerald-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+              }
             </div>
             <div className="text-left">
               <p className="font-bold text-gray-900 text-sm">Excel Spreadsheet</p>
@@ -208,13 +254,17 @@ function ExportModal({ onClose, onExport }: { onClose: () => void; onExport: (ty
           </button>
 
           <button
-            onClick={() => { onExport('pdf'); onClose(); }}
-            className="w-full flex items-center gap-4 p-4 rounded-xl border-2 border-orange-100 hover:border-orange-300 hover:bg-orange-50 active:bg-orange-100 transition-all group"
+            onClick={() => onExport('pdf')}
+            disabled={isExporting}
+            className="w-full flex items-center gap-4 p-4 rounded-xl border-2 border-orange-100 hover:border-orange-300 hover:bg-orange-50 active:bg-orange-100 disabled:opacity-60 disabled:cursor-not-allowed transition-all group"
           >
             <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center flex-shrink-0">
-              <svg className="w-5 h-5 text-orange-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-              </svg>
+              {isExporting
+                ? <span className="w-5 h-5 border-2 border-orange-300 border-t-orange-700 rounded-full animate-spin" />
+                : <svg className="w-5 h-5 text-orange-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  </svg>
+              }
             </div>
             <div className="text-left">
               <p className="font-bold text-gray-900 text-sm">PDF Document</p>
@@ -227,7 +277,11 @@ function ExportModal({ onClose, onExport }: { onClose: () => void; onExport: (ty
         </div>
 
         <div className="px-5 pb-6">
-          <button onClick={onClose} className="w-full text-sm font-semibold text-gray-400 hover:text-gray-600 py-2 transition-colors">
+          <button
+            onClick={onClose}
+            disabled={isExporting}
+            className="w-full text-sm font-semibold text-gray-400 hover:text-gray-600 disabled:opacity-40 py-2 transition-colors"
+          >
             Cancel
           </button>
         </div>
@@ -237,19 +291,24 @@ function ExportModal({ onClose, onExport }: { onClose: () => void; onExport: (ty
 }
 
 // -----------------------------------------------------------------------------
-// Mobile Transaction Card (replaces table rows on small screens)
+// Mobile Transaction Card
 // -----------------------------------------------------------------------------
 
-function MobileTransactionCard({ tx, onOpen, onPrint }: { tx: Transaction; onOpen: () => void; onPrint: () => void }) {
+function MobileTransactionCard({
+  tx, onOpen, onDownloadReceipt, isDownloading,
+}: {
+  tx: Transaction;
+  onOpen: () => void;
+  onDownloadReceipt: () => void;
+  isDownloading: boolean;
+}) {
   return (
     <div
       onClick={onOpen}
       className="px-4 py-4 hover:bg-gray-50/60 active:bg-gray-100 cursor-pointer transition-colors border-b border-gray-50 last:border-b-0"
     >
       <div className="flex items-start justify-between gap-3">
-        {/* Left */}
         <div className="flex items-start gap-3 min-w-0 flex-1">
-          {/* Status dot icon */}
           <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 ${STATUS_CONFIG[tx.status]?.bg || 'bg-gray-50'}`}>
             <span className={`w-2 h-2 rounded-full ${STATUS_CONFIG[tx.status]?.dot || 'bg-gray-400'}`} />
           </div>
@@ -263,17 +322,20 @@ function MobileTransactionCard({ tx, onOpen, onPrint }: { tx: Transaction; onOpe
           </div>
         </div>
 
-        {/* Right */}
         <div className="flex flex-col items-end gap-2 flex-shrink-0">
           <p className="text-sm font-bold text-gray-900">{formatCurrency(Number(tx.amount))}</p>
           <button
-            onClick={(e) => { e.stopPropagation(); onPrint(); }}
-            className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] font-semibold text-gray-600 bg-white border border-gray-200 rounded-lg hover:border-[#16a34a] hover:text-[#16a34a] active:bg-emerald-50 transition-all shadow-sm"
+            onClick={(e) => { e.stopPropagation(); onDownloadReceipt(); }}
+            disabled={isDownloading || tx.status === 'pending'}
+            className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] font-semibold text-gray-600 bg-white border border-gray-200 rounded-lg hover:border-[#16a34a] hover:text-[#16a34a] active:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
           >
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-            </svg>
-            Print
+            {isDownloading
+              ? <span className="w-3 h-3 border border-gray-300 border-t-gray-600 rounded-full animate-spin" />
+              : <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+            }
+            Receipt
           </button>
         </div>
       </div>
@@ -289,9 +351,12 @@ export default function TransactionsPage() {
   const [filters, setFilters] = useState<Filters>({
     search: '', status: '', payment_method: '', date_from: '', date_to: '',
   });
-  const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
-  const [showExport, setShowExport] = useState(false);
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [selectedTx, setSelectedTx]     = useState<Transaction | null>(null);
+  const [showExport, setShowExport]     = useState(false);
+  const [filtersOpen, setFiltersOpen]   = useState(false);
+  const [downloadingId, setDownloadingId] = useState<number | null>(null);
+  const [isExporting, setIsExporting]   = useState(false);
+  const [toast, setToast]               = useState<{ message: string; type: 'error' | 'success' } | null>(null);
 
   const { transactions, transactionSummary, isLoading, refreshTransactions, loadMore, hasNextPage } = useTransactions({
     search:         filters.search          || undefined,
@@ -303,13 +368,63 @@ export default function TransactionsPage() {
 
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
 
-  const handlePrint = () => {
-    window.alert(`Print receipt for ${selectedTx?.reference} — backend integration pending`);
-  };
+  // ── Receipt download ─────────────────────────────────────────────────────
 
-  const handleExport = (type: 'excel' | 'pdf') => {
-    window.alert(`Export as ${type.toUpperCase()} — backend integration pending`);
-  };
+  const handleDownloadReceipt = useCallback(async (tx: Transaction) => {
+    if (tx.status === 'pending') return;
+
+    setDownloadingId(tx.id);
+    try {
+      const result = await downloadReceiptAction(tx.id);
+      if (result.success && result.data) {
+        downloadPdf(result.data.blob, result.data.filename);
+        setToast({ message: 'Receipt downloaded successfully', type: 'success' });
+      } else {
+        setToast({ message: result.error || 'Failed to download receipt', type: 'error' });
+      }
+    } catch {
+      setToast({ message: 'Unexpected error downloading receipt', type: 'error' });
+    } finally {
+      setDownloadingId(null);
+    }
+  }, []);
+
+  // ── Export ───────────────────────────────────────────────────────────────
+
+  const handleExport = useCallback(async (type: 'excel' | 'pdf') => {
+    setIsExporting(true);
+    const exportFilters = {
+      status:         filters.status         || undefined,
+      payment_method: filters.payment_method || undefined,
+      date_from:      filters.date_from      || undefined,
+      date_to:        filters.date_to        || undefined,
+    };
+
+    try {
+      if (type === 'excel') {
+        const result = await exportTransactionsExcelAction(exportFilters);
+        if (result.success && result.data) {
+          downloadExcel(result.data.blob, result.data.filename);
+          setToast({ message: 'Excel export downloaded', type: 'success' });
+        } else {
+          setToast({ message: result.error || 'Export failed', type: 'error' });
+        }
+      } else {
+        const result = await exportTransactionsPdfAction(exportFilters);
+        if (result.success && result.data) {
+          downloadPdf(result.data.blob, result.data.filename);
+          setToast({ message: 'PDF export downloaded', type: 'success' });
+        } else {
+          setToast({ message: result.error || 'Export failed', type: 'error' });
+        }
+      }
+    } catch {
+      setToast({ message: 'Unexpected error during export', type: 'error' });
+    } finally {
+      setIsExporting(false);
+      setShowExport(false);
+    }
+  }, [filters]);
 
   const clearFilters = () => setFilters({ search: '', status: '', payment_method: '', date_from: '', date_to: '' });
 
@@ -324,7 +439,6 @@ export default function TransactionsPage() {
             <p className="text-xs sm:text-sm text-gray-400 mt-0.5">View, filter and export all payment transactions</p>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
-            {/* Refresh — icon only on mobile */}
             <button
               onClick={refreshTransactions}
               className="flex items-center gap-2 px-3 sm:px-4 py-2.5 text-sm font-semibold text-gray-600 bg-white border border-gray-200 rounded-xl hover:border-gray-300 hover:bg-gray-50 transition-all"
@@ -380,7 +494,6 @@ export default function TransactionsPage() {
           {filtersOpen && (
             <div className="px-4 sm:px-6 pb-5 border-t border-gray-50">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mt-4">
-                {/* Search */}
                 <div className="sm:col-span-2 lg:col-span-1">
                   <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Search</label>
                   <div className="relative">
@@ -397,7 +510,6 @@ export default function TransactionsPage() {
                   </div>
                 </div>
 
-                {/* Status */}
                 <div>
                   <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Status</label>
                   <select
@@ -413,7 +525,6 @@ export default function TransactionsPage() {
                   </select>
                 </div>
 
-                {/* Method */}
                 <div>
                   <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Method</label>
                   <select
@@ -427,7 +538,6 @@ export default function TransactionsPage() {
                   </select>
                 </div>
 
-                {/* Date From */}
                 <div>
                   <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">From Date</label>
                   <input
@@ -438,7 +548,6 @@ export default function TransactionsPage() {
                   />
                 </div>
 
-                {/* Date To */}
                 <div>
                   <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">To Date</label>
                   <input
@@ -449,7 +558,6 @@ export default function TransactionsPage() {
                   />
                 </div>
 
-                {/* Clear */}
                 {activeFilterCount > 0 && (
                   <div className="flex items-end">
                     <button
@@ -468,7 +576,6 @@ export default function TransactionsPage() {
         {/* ── Transaction List ─────────────────────────────────── */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
 
-          {/* List Header */}
           <div className="px-4 sm:px-6 py-4 border-b border-gray-50 flex items-center justify-between">
             <div>
               <h2 className="text-sm sm:text-base font-bold text-gray-900">Transaction History</h2>
@@ -516,7 +623,6 @@ export default function TransactionsPage() {
             </div>
           ) : (
             <>
-              {/* Desktop column headers — hidden on mobile */}
               <div className="hidden sm:grid grid-cols-[1fr_140px_130px_148px] px-6 py-3 bg-gray-50/70 border-b border-gray-100">
                 <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Reference</span>
                 <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Amount</span>
@@ -527,16 +633,17 @@ export default function TransactionsPage() {
               <div className="divide-y divide-gray-50">
                 {transactions.map((tx) => (
                   <div key={tx.id}>
-                    {/* Mobile card layout */}
+                    {/* Mobile */}
                     <div className="sm:hidden">
                       <MobileTransactionCard
                         tx={tx}
                         onOpen={() => setSelectedTx(tx)}
-                        onPrint={() => { setSelectedTx(tx); handlePrint(); }}
+                        onDownloadReceipt={() => handleDownloadReceipt(tx)}
+                        isDownloading={downloadingId === tx.id}
                       />
                     </div>
 
-                    {/* Desktop row layout */}
+                    {/* Desktop */}
                     <div
                       onClick={() => setSelectedTx(tx)}
                       className="hidden sm:grid grid-cols-[1fr_140px_130px_148px] items-center px-6 py-4 hover:bg-gray-50/60 cursor-pointer transition-colors"
@@ -554,13 +661,18 @@ export default function TransactionsPage() {
                       </div>
                       <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
                         <button
-                          onClick={() => { setSelectedTx(tx); handlePrint(); }}
-                          className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-gray-600 bg-white border border-gray-200 rounded-xl hover:border-[#16a34a] hover:text-[#16a34a] hover:bg-emerald-50 transition-all shadow-sm"
+                          onClick={() => handleDownloadReceipt(tx)}
+                          disabled={downloadingId === tx.id || tx.status === 'pending'}
+                          className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-gray-600 bg-white border border-gray-200 rounded-xl hover:border-[#16a34a] hover:text-[#16a34a] hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
+                          title={tx.status === 'pending' ? 'Not available for pending transactions' : 'Download receipt PDF'}
                         >
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                          </svg>
-                          Print Receipt
+                          {downloadingId === tx.id
+                            ? <span className="w-3.5 h-3.5 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
+                            : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                              </svg>
+                          }
+                          {downloadingId === tx.id ? 'Downloading...' : 'Download Receipt'}
                         </button>
                       </div>
                     </div>
@@ -568,7 +680,6 @@ export default function TransactionsPage() {
                 ))}
               </div>
 
-              {/* Load More */}
               {hasNextPage && (
                 <div className="px-4 sm:px-6 py-4 border-t border-gray-50 flex justify-center">
                   <button
@@ -594,13 +705,24 @@ export default function TransactionsPage() {
         <TransactionModal
           tx={selectedTx}
           onClose={() => setSelectedTx(null)}
-          onPrint={handlePrint}
+          onDownloadReceipt={() => handleDownloadReceipt(selectedTx)}
+          isDownloading={downloadingId === selectedTx.id}
         />
       )}
       {showExport && (
         <ExportModal
           onClose={() => setShowExport(false)}
           onExport={handleExport}
+          isExporting={isExporting}
+        />
+      )}
+
+      {/* ── Toast ───────────────────────────────────────────── */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onDismiss={() => setToast(null)}
         />
       )}
     </>
