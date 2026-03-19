@@ -14,7 +14,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { FormField } from './FormField';
 import { Button, Alert, Spinner } from '@/components/ui';
 import { loginSchema, LoginInput, LoginResponse } from '@/lib/validations';
-import { DASHBOARD_ROUTES, AUTH_ROUTES } from '@/constants/routes'; 
+import { DASHBOARD_ROUTES, AUTH_ROUTES } from '@/constants/routes';
+import { useWebSocketStore } from '@/stores/useWebSocketStore'; // ✅ NEW
 
 // -----------------------------------------------------------------------------
 // Types
@@ -34,6 +35,7 @@ export function LoginForm({ onSuccess, onError }: LoginFormProps) {
   const { login, mustChangePassword } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const triggerConnect = useWebSocketStore((s) => s.triggerConnect); // ✅ NEW
 
   const methods = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
@@ -62,15 +64,20 @@ export function LoginForm({ onSuccess, onError }: LoginFormProps) {
         onError?.(errorMsg);
         return;
       }
-      
-      const loginData = result.data as LoginResponse | undefined;
 
+      const loginData = result.data as LoginResponse | undefined;
 
       // Handle force password change redirect
       if (mustChangePassword || loginData?.must_change_password) {
         router.push(AUTH_ROUTES.FORCE_PASSWORD_CHANGE);
         return;
       }
+
+      // ✅ NEW: Kick off WebSocket connection immediately — don't wait for
+      // the dashboard to mount. WebSocketProvider watches this flag and calls
+      // connect() as soon as it's set, so the socket is open (or opening) by
+      // the time the dashboard renders.
+      triggerConnect();
 
       // Success
       onSuccess?.();
