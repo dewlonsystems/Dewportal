@@ -12,7 +12,7 @@ import {
   type ReactElement,
 } from 'react';
 import { useAuthStore } from '@/stores/useAuthStore';
-import { useWebSocketStore } from '@/stores/useWebSocketStore';
+import { useWebSocketStore, selectShouldConnect } from '@/stores/useWebSocketStore';
 import { useNotificationStore } from '@/stores/useNotificationStore';
 import { WS_BASE_URL, WS_ENDPOINTS } from '@/lib/api/endpoints';
 import { WS_CONFIG } from '@/constants/config';
@@ -42,27 +42,32 @@ export function WebSocketProvider({ children }: WebSocketProviderProps): ReactEl
     addTransaction,
     updateTransaction,
     reconnectAttempts,
+    clearConnectTrigger, // ✅ NEW
   } = useWebSocketStore();
 
   const { addNotification: addNotificationToStore } = useNotificationStore();
 
   // ── Subscribe to only what we need ────────────────────────────────────────
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const isInitialized   = useAuthStore((state) => state.isInitialized);  // ✅ NEW
+  const isInitialized   = useAuthStore((state) => state.isInitialized);
   const user            = useAuthStore((state) => state.user);
+  const shouldConnect   = useWebSocketStore(selectShouldConnect); // ✅ NEW
 
   // ---------------------------------------------------------------------------
   // Connect
   // ---------------------------------------------------------------------------
 
   const connect = useCallback(async () => {
-    // ✅ FIX 1: Wait until AuthProvider has finished verifying the session
-    if (!isInitialized) {
+    // When triggered by login (shouldConnect), skip the isInitialized check
+    // because the user just authenticated — we know the session is valid.
+    // For all other cases (e.g. page load), wait for auth to be initialized.
+    const triggeredByLogin = useWebSocketStore.getState().shouldConnect;
+
+    if (!triggeredByLogin && !isInitialized) {
       debugLog('WebSocket: Skipping connection (auth not initialized yet)');
       return;
     }
 
-    // ✅ FIX 2: Only connect if truly authenticated
     if (!isAuthenticated || !user) {
       debugLog('WebSocket: Skipping connection (not authenticated)');
       return;
@@ -82,7 +87,7 @@ export function WebSocketProvider({ children }: WebSocketProviderProps): ReactEl
       setConnecting(true);
       setConnectionError(null);
 
-      // ✅ FIX 3: Fetch token via server action — reads httpOnly cookie server-side
+      // Fetch token via server action — reads httpOnly cookie server-side
       const { token } = await getAccessTokenForWSAction();
 
       if (!token) {
@@ -122,7 +127,7 @@ export function WebSocketProvider({ children }: WebSocketProviderProps): ReactEl
               }
               break;
 
-            case 'payment_status_update':   // ✅ payments page listener
+            case 'payment_status_update':
             case 'transaction_update':
               if (message.data) {
                 const transaction = message.data as Transaction;
@@ -209,7 +214,7 @@ export function WebSocketProvider({ children }: WebSocketProviderProps): ReactEl
     }
   }, [
     isAuthenticated,
-    isInitialized,       // ✅ added
+    isInitialized,
     user,
     setConnecting,
     setConnectionError,
@@ -262,9 +267,7 @@ export function WebSocketProvider({ children }: WebSocketProviderProps): ReactEl
   }, []);
 
   // ---------------------------------------------------------------------------
-  // Effect: Connect when auth state is ready
-  // ✅ FIX: isInitialized added to dependency array — connect() now only
-  //         fires after AuthProvider.initializeSession() has completed
+  // Effect: Connect on page load when auth state is ready
   // ---------------------------------------------------------------------------
 
   useEffect(() => {
@@ -276,6 +279,20 @@ export function WebSocketProvider({ children }: WebSocketProviderProps): ReactEl
 
     return () => { disconnect(); };
   }, [isInitialized, isAuthenticated, user, connect, disconnect]);
+
+  // ---------------------------------------------------------------------------
+  // ✅ NEW Effect: Connect immediately when LoginForm triggers shouldConnect.
+  // This fires as soon as login() succeeds — before the dashboard even mounts,
+  // so the WebSocket is already open by the time the user sees the dashboard.
+  // ---------------------------------------------------------------------------
+
+  useEffect(() => {
+    if (!shouldConnect) return;
+
+    debugLog('WebSocket: Post-login connect triggered');
+    clearConnectTrigger(); // clear the flag first to avoid double-firing
+    connect();
+  }, [shouldConnect, connect, clearConnectTrigger]);
 
   // ---------------------------------------------------------------------------
   // Effect: Heartbeat
