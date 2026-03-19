@@ -36,6 +36,9 @@ export interface WebSocketState {
   unreadCount: number;
   recentTransactions: Transaction[];
 
+  // ✅ NEW: Flag to trigger immediate connection after login
+  shouldConnect: boolean;
+
   // Event handlers
   onConnect: (() => void) | null;
   onDisconnect: (() => void) | null;
@@ -60,6 +63,9 @@ export interface WebSocketState {
   setOnConnect: (handler: (() => void) | null) => void;
   setOnDisconnect: (handler: (() => void) | null) => void;
   setOnMessage: (handler: ((message: WebSocketMessage) => void) | null) => void;
+  // ✅ NEW: Actions to manage the connect trigger
+  triggerConnect: () => void;
+  clearConnectTrigger: () => void;
   reset: () => void;
 }
 
@@ -83,6 +89,7 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
   notifications: [],
   unreadCount: 0,
   recentTransactions: [],
+  shouldConnect: false, // ✅ NEW
   onConnect: null,
   onDisconnect: null,
   onMessage: null,
@@ -250,6 +257,21 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
   },
 
   // ---------------------------------------------------------------------------
+  // ✅ NEW: Connect Trigger Actions
+  // Called by LoginForm immediately after a successful login response.
+  // WebSocketProvider watches shouldConnect and calls connect() when true.
+  // ---------------------------------------------------------------------------
+
+  triggerConnect: () => {
+    debugLog('WebSocket Store: Connect triggered (post-login)');
+    set({ shouldConnect: true });
+  },
+
+  clearConnectTrigger: () => {
+    set({ shouldConnect: false });
+  },
+
+  // ---------------------------------------------------------------------------
   // Reset Action
   // ---------------------------------------------------------------------------
 
@@ -273,6 +295,7 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
       notifications: [],
       unreadCount: 0,
       recentTransactions: [],
+      shouldConnect: false, // ✅ NEW: reset the trigger too
       onConnect: null,
       onDisconnect: null,
       onMessage: null,
@@ -291,6 +314,7 @@ export const selectNotifications = (state: WebSocketState) => state.notification
 export const selectUnreadCount = (state: WebSocketState) => state.unreadCount;
 export const selectRecentTransactions = (state: WebSocketState) => state.recentTransactions;
 export const selectReconnectAttempts = (state: WebSocketState) => state.reconnectAttempts;
+export const selectShouldConnect = (state: WebSocketState) => state.shouldConnect; // ✅ NEW
 
 // -----------------------------------------------------------------------------
 // Helper Functions
